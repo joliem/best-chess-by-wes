@@ -195,7 +195,7 @@ function SwitcherooChess() {
           away!
         </p>
         <Link to="/" className="mt-1 inline-block text-xs text-torch underline">
-          ← Back to Treasure Chess
+          ← All variants
         </Link>
       </header>
 
@@ -249,7 +249,6 @@ function SwitcherooChess() {
           <div className="rounded-xl border border-border bg-card p-4">
             <h2 className="mb-3 text-lg">How Switcheroo Chess works</h2>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>♟️ Standard chess rules.</li>
               <li>
                 🌀 Before any move there&apos;s a 1-in-10 chance the board spins into switcheroo
                 mode.

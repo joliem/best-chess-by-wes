@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ChessBoard, type GuessMark } from "@/components/chess/ChessBoard";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import {
   type PieceType,
   type Sq,
 } from "@/lib/chess";
-import { CAMO_RULES, isCamoBishop } from "@/lib/fog";
+import { isCamoBishop } from "@/lib/fog";
 import { BrandMark } from "@/components/Brand";
 import { CapturedBar } from "@/components/chess/CapturedBar";
 import { lostFromBoard } from "@/lib/captures";
@@ -171,8 +171,11 @@ function CamoChess() {
         <p className="text-sm uppercase tracking-[0.35em] text-torch">Wesley&apos;s</p>
         <h1 className="text-4xl text-foreground sm:text-5xl">Camo Chess</h1>
         <p className="mt-2 text-muted-foreground">
-          Real chess rules — but some enemy pieces are hidden on the battlefield.
+          One of your enemy&apos;s bishops is hidden on the battlefield.
         </p>
+        <Link to="/" className="mt-1 inline-block text-xs text-torch underline">
+          ← All variants
+        </Link>
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
@@ -212,33 +215,15 @@ function CamoChess() {
 
           <CapturedBar lost={lost} />
 
-          <div className="rounded-xl border border-border bg-card px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-torch">
-              How the camouflage works
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {CAMO_RULES.map((r) => r.blurb).join(" ")}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              When your opponent moves their hidden kingside bishop, you immediately get one guess
-              at its light or dark square. Find it to reveal it for good.
-            </p>
-          </div>
         </div>
 
         <aside className="flex flex-col gap-4">
           <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="mb-3 text-lg">Hidden-Info Rules</h2>
+            <h2 className="mb-3 text-lg">How Camo Chess works</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">
-              {CAMO_RULES.map((rule) => (
-                <li key={rule.name}>
-                  <strong className="text-foreground">{rule.name}:</strong> {rule.blurb}
-                </li>
-              ))}
-              <li>
-                🔦 A correct guess reveals the bishop for the rest of the game.
-              </li>
-              <li>👑 Your king pulses red in check, and he can never step into check.</li>
+              <li>🫥 Your opponent&apos;s kingside bishop is camouflaged on squares of its same color. White&apos;s is always on light squares; Black&apos;s is always on dark squares.</li>
+              <li>🔦 Whenever a hidden bishop moves, the other player gets one Battleship-style guess where it is. If guessed correctly, it&apos;s unhidden for the rest of the game.</li>
+              <li>💡 If you&apos;re clever you might be able to figure out where your opponent&apos;s bishop is hiding if it blocks the path of one of your pieces. You can even capture it!</li>
             </ul>
           </div>
 

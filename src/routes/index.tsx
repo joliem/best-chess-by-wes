@@ -68,9 +68,9 @@ const VARIANTS: Variant[] = [
     to: "/camo",
     emoji: "🫥",
     name: "Camo Chess",
-    tagline: "Squares hide pieces of the same color",
+    tagline: "Squares hide bishops of the same color",
     blurb:
-      "One hidden kingside bishop, plus a single immediate guess whenever it moves.",
+      "Each player has one hidden bishop that's only revealed if its location is correctly guessed after it moves.",
     online: "camo",
   },
 ];
@@ -117,8 +117,8 @@ function VariantHub() {
         <p className="mt-2 text-sm uppercase tracking-[0.35em] text-jade">Wesley&apos;s</p>
         <h1 className="text-4xl text-foreground sm:text-6xl">Chess Variants</h1>
         <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-          Homemade twists on chess. Play at the same screen, or send a friend a link and play any of
-          them from two different devices.
+          Regular chess rules apply except for a few fun twists. Play at the same screen, or send a
+          friend a link and play any of them from two different devices.
         </p>
       </header>
 

@@ -85,7 +85,7 @@ function TreasureChess() {
   useCaptureToast(lost);
   const [reveal, setReveal] = useState<CoinReveal | null>(null);
   const [log, setLog] = useState<string[]>([
-    "Six coins are buried somewhere in the middle four ranks. Nobody knows where!",
+    "Six coins are buried somewhere in the middle four ranks. Land on them and plunder!",
   ]);
 
   // Randomised on the client only, so the server render always matches.
@@ -118,15 +118,6 @@ function TreasureChess() {
   }, [phase, board, turn, pendingCoin]);
 
   const score = (c: Color) => chest[c].gold * 2 + chest[c].silver;
-
-  function callDraw() {
-    const w = score("w");
-    const b = score("b");
-    setDrawByTreasure(true);
-    setWinner(w === b ? "tie" : w > b ? "w" : "b");
-    setPhase("over");
-    say(`🤝 Draw called — treasure decides it: White ${w} vs Black ${b}.`);
-  }
 
   function reset() {
     setBoard(initialBoard());
@@ -313,12 +304,9 @@ function TreasureChess() {
           Six coins are buried in the middle four ranks. Land on one to grab it — then spend it for
           magic.
         </p>
-        <div className="mt-1 flex justify-center gap-4 text-xs text-torch">
+        <div className="mt-1 flex justify-center text-xs text-torch">
           <Link to="/" className="underline">
             ← All variants
-          </Link>
-          <Link to="/switcheroo" className="underline">
-            Try Switcheroo Chess →
           </Link>
         </div>
       </header>
@@ -433,24 +421,6 @@ function TreasureChess() {
                 </li>
               ))}
             </ul>
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="mb-1 text-lg">Treasure score</h2>
-            <p className="text-xs text-muted-foreground">
-              Gold counts as 2, silver as 1. If you agree to a draw, the richer chest wins.
-            </p>
-            <p className="mt-2 text-sm">
-              ♔ White {score("w")} &nbsp;·&nbsp; ♚ Black {score("b")}
-            </p>
-            <Button
-              className="mt-3 w-full"
-              variant="secondary"
-              onClick={callDraw}
-              disabled={phase === "over"}
-            >
-              Agree to a draw
-            </Button>
           </div>
 
           <Button variant="outline" onClick={reset}>
