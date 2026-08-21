@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { TreasureBoard, type CoinReveal } from "@/components/chess/TreasureBoard";
-import { CoinIcon } from "@/components/CoinIcon";
+import { CoinIcon, CoinPileIcon } from "@/components/CoinIcon";
 import { TreasureChest } from "@/components/chess/TreasureChest";
 import { BattleLog } from "@/components/online/OnlineSwitcheroo";
 import { GameOver, PromotionPicker } from "@/components/online/shell";
@@ -107,12 +107,20 @@ export function OnlineTreasure({ game, seat, sending, error, act, rematch }: Onl
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
       <div className="flex flex-col gap-3">
-        <TreasureChest
-          color={other(viewer)}
-          chest={state.chest}
-          active={false}
-          onSpend={() => {}}
-        />
+        <div className="grid grid-cols-2 divide-x divide-border overflow-hidden rounded-xl border-2 border-border bg-card/70 shadow-glow">
+          <TreasureChest
+            color="w"
+            chest={state.chest}
+            active={viewer === "w" && myTurn && state.phase === "move"}
+            onSpend={(coin: CoinKind) => void act({ kind: "spend", coin })}
+          />
+          <TreasureChest
+            color="b"
+            chest={state.chest}
+            active={viewer === "b" && myTurn && state.phase === "move"}
+            onSpend={(coin: CoinKind) => void act({ kind: "spend", coin })}
+          />
+        </div>
 
         <div
           className={cn(
@@ -148,12 +156,6 @@ export function OnlineTreasure({ game, seat, sending, error, act, rematch }: Onl
           onSquare={onSquare}
         />
 
-        <TreasureChest
-          color={viewer}
-          chest={state.chest}
-          active={myTurn && state.phase === "move"}
-          onSpend={(coin: CoinKind) => void act({ kind: "spend", coin })}
-        />
         <CapturedBar lost={lost} viewer={seat ?? null} />
         {error && <p className="text-center text-sm text-destructive">{error}</p>}
       </div>
@@ -161,15 +163,21 @@ export function OnlineTreasure({ game, seat, sending, error, act, rematch }: Onl
       <aside className="flex flex-col gap-4">
         <div className="rounded-xl border border-border bg-card p-4">
           <h2 className="mb-3 text-lg">How Treasure Chess works</h2>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex gap-2">
-              <CoinIcon className="mt-0.5 h-4 w-4 shrink-0" />
+          <ul className="space-y-2 text-sm text-muted-foreground [&>li]:grid [&>li]:grid-cols-[1.25rem_minmax(0,1fr)] [&>li]:items-start [&>li]:gap-2">
+            <li>
+              <CoinPileIcon className="h-5 w-5" />
               <span>Three gold and three silver coins hide on the middle four ranks.</span>
             </li>
-            <li>🎁 Land on a square and you scoop up every coin hidden there.</li>
-            <li>⚪ Spend a silver coin: one piece is untouchable for 2 enemy moves.</li>
-            <li className="flex gap-2">
-              <CoinIcon className="mt-0.5 h-4 w-4 shrink-0" />
+            <li>
+              <span>🎁</span>
+              <span>Land on a square and you scoop up every coin hidden there.</span>
+            </li>
+            <li>
+              <span>⚪</span>
+              <span>Spend a silver coin: one piece is untouchable for 2 enemy moves.</span>
+            </li>
+            <li>
+              <CoinIcon className="mt-0.5 h-4 w-4" />
               <span>
                 Gold: spend your whole move to give a piece (not your king) Queen powers through
                 your following move. It attacks like a Queen the moment it&apos;s chosen, can move
@@ -177,11 +185,15 @@ export function OnlineTreasure({ game, seat, sending, error, act, rematch }: Onl
               </span>
             </li>
             <li>
-              ♛ Normal check rules except a stalemate is decided by treasure stockpiles remaining (1
-              gold = 2 silver). A stalemate only ends in a draw if stockpiles are equal.
+              <span className="grid size-5 place-items-center rounded-full border border-torch/70 text-base leading-none text-torch">
+                ♛
+              </span>
+              <span>
+                A stalemate is decided by remaining treasure stockpiles (1 gold coin = 2 silver
+                coins), and only ends in a draw if stockpiles are equal.
+              </span>
             </li>
           </ul>
-
         </div>
 
         <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">

@@ -8,7 +8,7 @@ import { findKing, GLYPH, key, same, type Color, type PieceType, type Sq } from 
 import { CapturedBar } from "@/components/chess/CapturedBar";
 import { useCaptureToast } from "@/hooks/useCaptureToast";
 import { emptyLost } from "@/lib/captures";
-import { NAME, type CamoPublicState } from "@/lib/camo-engine";
+import { NAME, type CamoPublicState, type GuessRecord } from "@/lib/camo-engine";
 import type { OnlineProps } from "@/components/online/types";
 import { cn } from "@/lib/utils";
 type Selection = { sq: Sq; hidden: boolean };
@@ -20,13 +20,26 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
 
   const [selected, setSelected] = useState<Selection | null>(null);
   const [pending, setPending] = useState<{ from: Sq; to: Sq } | null>(null);
+  const [guessReveal, setGuessReveal] = useState<GuessRecord | null>(null);
   const seenNotice = useRef<number | null>(null);
+  const latestGuess = state.guesses.at(-1);
 
   useEffect(() => {
     if (!state.notice || seenNotice.current === state.notice.id) return;
     seenNotice.current = state.notice.id;
-    toast(state.notice.text, { icon: state.notice.text.includes("check") ? "⚔️" : "🎯" });
+    toast(state.notice.text, {
+      icon: state.notice.text.includes("check") ? "⚔️" : "🎯",
+      duration: 4200,
+    });
   }, [state.notice]);
+  useEffect(() => {
+    if (!latestGuess) return;
+    setGuessReveal(latestGuess);
+    const timer = window.setTimeout(() => setGuessReveal(null), 4200);
+    return () => window.clearTimeout(timer);
+    // Only a new guess should restart the reveal; later realtime updates must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestGuess?.id]);
 
   const mode: "move" | "guess" | "locked" = !myTurn
     ? "locked"
@@ -118,6 +131,7 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
           moves={moves}
           lastMove={state.lastMove}
           guesses={state.guesses}
+          guessReveal={guessReveal}
           checkSq={checkSq}
           mode={mode}
           onSquare={onSquare}
@@ -131,18 +145,24 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
       <aside className="flex flex-col gap-4">
         <div className="rounded-xl border border-border bg-card p-4">
           <h2 className="mb-3 text-lg">How Battleship Bishop works</h2>
-          <ul className="space-y-3 text-sm text-muted-foreground">
+          <ul className="space-y-3 text-sm text-muted-foreground [&>li]:grid [&>li]:grid-cols-[1.25rem_minmax(0,1fr)] [&>li]:items-start [&>li]:gap-2">
             <li>
-              🫥 Each player&apos;s kingside bishop is camouflaged on squares of its same color —
-              White&apos;s is hidden on light squares; Black&apos;s is hidden on dark squares. It
-              hidden bishop can&apos;t be captured in the regular way, and another piece can even
-              land on the square where it&apos;s hiding.
+              <span>🫥</span>
+              <span>
+                Each player&apos;s kingside bishop is camouflaged on squares of its same color —
+                White&apos;s is hidden on light squares; Black&apos;s is hidden on dark squares. The
+                hidden bishop can&apos;t be captured in the regular way, and another piece of either
+                color can even land on the square where it&apos;s hiding.
+              </span>
             </li>
             <li>
-              🎯 If the hidden bishop moves without making a capture, the other player gets to guess
-              its location, battleship-style! If they guess correctly, they capture the bishop.
+              <span>🎯</span>
+              <span>
+                If the hidden bishop moves without making a capture, the other player gets to guess
+                its location, battleship-style! If they guess correctly, they capture the bishop.
+              </span>
             </li>
-            <li className="flex gap-2">
+            <li>
               <MissMarkerIcon className="mt-0.5" />
               <span>
                 A hidden bishop can&apos;t move onto an occupied square unless it captures an enemy
@@ -150,8 +170,11 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
               </span>
             </li>
             <li>
-              ✓ The hidden bishop can give check, but only on a move by itself or one of its own
-              army pieces.
+              <span>✓</span>
+              <span>
+                The hidden bishop can give check, but only on a move by itself or one of its own
+                army pieces.
+              </span>
             </li>
           </ul>
         </div>

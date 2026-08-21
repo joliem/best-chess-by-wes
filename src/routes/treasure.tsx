@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { TreasureBoard, type CoinReveal } from "@/components/chess/TreasureBoard";
-import { CoinIcon } from "@/components/CoinIcon";
+import { CoinIcon, CoinPileIcon } from "@/components/CoinIcon";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -320,7 +320,20 @@ function TreasureChess() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="flex flex-col gap-3">
-          <TreasureChest color={other(turn)} chest={chest} active={false} onSpend={spend} />
+          <div className="grid grid-cols-2 divide-x divide-border overflow-hidden rounded-xl border-2 border-border bg-card/70 shadow-glow">
+            <TreasureChest
+              color="w"
+              chest={chest}
+              active={turn === "w" && phase === "move"}
+              onSpend={spend}
+            />
+            <TreasureChest
+              color="b"
+              chest={chest}
+              active={turn === "b" && phase === "move"}
+              onSpend={spend}
+            />
+          </div>
 
           <div
             className={cn(
@@ -342,8 +355,6 @@ function TreasureChess() {
             </span>
           </div>
 
-          <CapturedBar lost={lost} />
-
           <TreasureBoard
             board={board}
             viewer={turn}
@@ -360,23 +371,26 @@ function TreasureChess() {
             onSquare={onSquare}
           />
 
-          <TreasureChest color={turn} chest={chest} active={phase === "move"} onSpend={spend} />
+          <CapturedBar lost={lost} />
         </div>
 
         <aside className="flex flex-col gap-4">
           <div className="rounded-xl border border-border bg-card p-4">
             <h2 className="mb-3 text-lg">How Treasure Chess works</h2>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex gap-2">
-                <CoinIcon className="mt-0.5 h-4 w-4 shrink-0" />
+            <ul className="space-y-2 text-sm text-muted-foreground [&>li]:grid [&>li]:grid-cols-[1.25rem_minmax(0,1fr)] [&>li]:items-start [&>li]:gap-2">
+              <li>
+                <CoinPileIcon className="h-5 w-5" />
                 <span>
-                  3 gold + ⚪ 3 silver coins hide on random middle-rank squares (a square can hold
-                  more than one).
+                  3 gold + 3 silver coins hide on random middle-rank squares (a square can hold more
+                  than one).
                 </span>
               </li>
-              <li>🏃 Land on a square and you scoop up every coin hidden there.</li>
-              <li className="flex gap-2">
-                <CoinIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              <li>
+                <span>🏃</span>
+                <span>Land on a square and you scoop up every coin hidden there.</span>
+              </li>
+              <li>
+                <CoinIcon className="mt-0.5 h-4 w-4" />
                 <span>
                   Gold: spend your whole move to give a piece (not your king) Queen powers through
                   your following move. A gold-powered piece attacks like a Queen and can give check
@@ -385,13 +399,20 @@ function TreasureChess() {
                 </span>
               </li>
               <li>
-                ⚪ Silver: spend your whole move to make a piece (not your king) uncapturable for 2
-                enemy moves.
+                <span>⚪</span>
+                <span>
+                  Silver: spend your whole move to make a piece (not your king) uncapturable for 2
+                  enemy moves.
+                </span>
               </li>
               <li>
-                ♛ Normal check rules except a stalemate is decided by treasure stockpiles remaining
-                (1 gold coin = 2 silver coins). A stalemate only ends in a draw if treasure
-                stockpiles are equal.
+                <span className="grid size-5 place-items-center rounded-full border border-torch/70 text-base leading-none text-torch">
+                  ♛
+                </span>
+                <span>
+                  A stalemate is decided by remaining treasure stockpiles (1 gold coin = 2 silver
+                  coins), and only ends in a draw if stockpiles are equal.
+                </span>
               </li>
             </ul>
           </div>
@@ -494,6 +515,7 @@ function TreasureChest({
 }) {
   const mine = chest[color];
   const white = color === "w";
+  const value = mine.gold * 2 + mine.silver;
 
   const slot = (kind: CoinKind, i: number) => {
     const has = mine[kind] > i;
@@ -506,7 +528,7 @@ function TreasureChest({
         title={has ? COIN_HELP[kind] : "Empty slot"}
         onClick={() => onSpend(kind)}
         className={cn(
-          "grid size-8 place-items-center rounded-full border-2 text-base transition",
+          "grid size-6 place-items-center rounded-full border-2 text-xs transition sm:size-7 sm:text-sm",
           has
             ? kind === "gold"
               ? "border-torch bg-torch/30 shadow-glow"
@@ -523,13 +545,11 @@ function TreasureChest({
   return (
     <div
       className={cn(
-        "flex items-center gap-4 rounded-xl border-2 px-3 py-2",
-        white ? "border-piece-light/70 bg-piece-light/10" : "border-piece-dark bg-piece-dark/40",
-        active && "shadow-glow",
+        "grid min-w-0 grid-cols-[4rem_auto_minmax(0,1fr)] items-center gap-2 px-2 py-2",
       )}
     >
       {/* the chest itself */}
-      <div className="w-24 shrink-0 select-none" aria-hidden>
+      <div className="w-16 select-none" aria-hidden>
         <svg viewBox="0 0 100 78" className="w-full drop-shadow-[0_4px_6px_oklch(0_0_0/0.5)]">
           {(() => {
             const shell = white ? "oklch(0.99 0.01 95)" : "oklch(0.22 0.03 250)";
@@ -569,8 +589,7 @@ function TreasureChest({
         </svg>
         <p
           className={cn(
-            "mt-1 text-center text-[11px] leading-tight",
-            white ? "text-piece-light" : "text-foreground/80",
+            "mt-1 whitespace-nowrap text-center text-[10px] leading-tight text-foreground/80",
           )}
         >
           {NAME[color]}&apos;s chest
@@ -578,24 +597,19 @@ function TreasureChest({
       </div>
 
       {/* coins earned, one row of gold and one of silver */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1">
-          <span className="w-10 text-[10px] uppercase tracking-wider text-muted-foreground">
-            Gold
-          </span>
-          {[0, 1, 2].map((i) => slot("gold", i))}
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="w-10 text-[10px] uppercase tracking-wider text-muted-foreground">
-            Silver
-          </span>
-          {[0, 1, 2].map((i) => slot("silver", i))}
-        </div>
+      <div className="min-w-0 flex flex-col gap-1">
+        <span className="text-center text-[10px] text-muted-foreground">Value {value}</span>
+        <div className="flex items-center gap-1">{[0, 1, 2].map((i) => slot("gold", i))}</div>
+        <div className="flex items-center gap-1">{[0, 1, 2].map((i) => slot("silver", i))}</div>
       </div>
-
-      {active && (
-        <span className="ml-auto text-xs text-muted-foreground">Click a coin to spend it</span>
-      )}
+      <span
+        className={cn(
+          "text-center text-[9px] leading-tight text-muted-foreground",
+          !(active && value > 0) && "invisible",
+        )}
+      >
+        Click a coin to spend
+      </span>
     </div>
   );
 }

@@ -106,7 +106,11 @@ export function TreasureBoard({
                   <span
                     className={cn(
                       "pointer-events-none absolute inset-0 grid place-items-center leading-none",
-                      piece.type === "p" ? "text-[62cqmin]" : "text-[78cqmin]",
+                      piece.type === "p"
+                        ? "-translate-y-[3%] text-[62cqmin]"
+                        : piece.type === "r"
+                          ? "-translate-y-[8%] text-[73cqmin]"
+                          : "-translate-y-[8%] text-[78cqmin]",
                       piece.color === "w"
                         ? "text-piece-light [text-shadow:0_0_1px_oklch(0.2_0.03_250),0_1px_2px_oklch(0_0_0/0.55),0_0_3px_oklch(0.2_0.03_250)]"
                         : "text-piece-dark [text-shadow:0_0_1px_oklch(1_0_0/0.85),0_1px_2px_oklch(1_0_0/0.5)]",

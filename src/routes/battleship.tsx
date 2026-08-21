@@ -6,7 +6,13 @@ import { CapturedBar } from "@/components/chess/CapturedBar";
 import { ChessBoard, MissMarkerIcon } from "@/components/chess/ChessBoard";
 import { Button } from "@/components/ui/button";
 import { useCaptureToast } from "@/hooks/useCaptureToast";
-import { applyCamoAction, createCamoState, maskCamoState, NAME } from "@/lib/camo-engine";
+import {
+  applyCamoAction,
+  createCamoState,
+  maskCamoState,
+  NAME,
+  type GuessRecord,
+} from "@/lib/camo-engine";
 import { findKing, GLYPH, key, same, type PieceType, type Sq } from "@/lib/chess";
 import { cn } from "@/lib/utils";
 
@@ -39,8 +45,10 @@ function BattleshipBishop() {
   const [selected, setSelected] = useState<Selection | null>(null);
   const [pending, setPending] = useState<{ from: Sq; to: Sq } | null>(null);
   const [handoff, setHandoff] = useState(false);
+  const [guessReveal, setGuessReveal] = useState<GuessRecord | null>(null);
   const seenNotice = useRef<number | null>(null);
   const publicState = useMemo(() => maskCamoState(state, state.turn), [state]);
+  const latestGuess = publicState.guesses.at(-1);
   const moves = selected
     ? selected.hidden
       ? publicState.hiddenLegal
@@ -55,11 +63,20 @@ function BattleshipBishop() {
       duration: 4200,
     });
   }, [handoff, publicState.notice]);
+  useEffect(() => {
+    if (!latestGuess) return;
+    setGuessReveal(latestGuess);
+    const timer = window.setTimeout(() => setGuessReveal(null), 4200);
+    return () => window.clearTimeout(timer);
+    // Only a new guess should restart the reveal; later game-state updates must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestGuess?.id]);
   function reset() {
     setState(createCamoState());
     setSelected(null);
     setPending(null);
     setHandoff(false);
+    setGuessReveal(null);
     seenNotice.current = null;
   }
   function move(from: Sq, to: Sq, hidden = false, promoteTo?: PieceType) {
@@ -150,6 +167,7 @@ function BattleshipBishop() {
             moves={moves}
             lastMove={publicState.lastMove}
             guesses={publicState.guesses}
+            guessReveal={guessReveal}
             checkSq={
               publicState.checkColor ? findKing(publicState.board, publicState.checkColor) : null
             }
@@ -161,19 +179,25 @@ function BattleshipBishop() {
         <aside className="flex flex-col gap-4">
           <div className="rounded-xl border border-border bg-card p-4">
             <h2 className="mb-3 text-lg">How Battleship Bishop works</h2>
-            <ul className="space-y-3 text-sm text-muted-foreground">
+            <ul className="space-y-3 text-sm text-muted-foreground [&>li]:grid [&>li]:grid-cols-[1.25rem_minmax(0,1fr)] [&>li]:items-start [&>li]:gap-2">
               <li>
-                🫥 Each player&apos;s kingside bishop is camouflaged on squares of its same color —
-                White&apos;s is hidden on light squares; Black&apos;s is hidden on dark squares. The
-                hidden bishop can&apos;t be captured in the regular way, and another piece can even
-                land on the square where it&apos;s hiding.
+                <span>🫥</span>
+                <span>
+                  Each player&apos;s kingside bishop is camouflaged on squares of its same color —
+                  White&apos;s is hidden on light squares; Black&apos;s is hidden on dark squares.
+                  The hidden bishop can&apos;t be captured in the regular way, and another piece of
+                  either color can even land on the square where it&apos;s hiding.
+                </span>
               </li>
               <li>
-                🎯 If the hidden bishop moves without making a capture, the other player gets to
-                guess its location, battleship-style! If they guess correctly, they capture the
-                bishop.
+                <span>🎯</span>
+                <span>
+                  If the hidden bishop moves without making a capture, the other player gets to
+                  guess its location, battleship-style! If they guess correctly, they capture the
+                  bishop.
+                </span>
               </li>
-              <li className="flex gap-2">
+              <li>
                 <MissMarkerIcon className="mt-0.5" />
                 <span>
                   A hidden bishop can&apos;t move onto an occupied square unless it&apos;s capturing
@@ -181,8 +205,11 @@ function BattleshipBishop() {
                 </span>
               </li>
               <li>
-                ✓ The hidden bishop can give check, but only on a move by itself or one of its own
-                army pieces.
+                <span>✓</span>
+                <span>
+                  The hidden bishop can give check, but only on a move by itself or one of its own
+                  army pieces.
+                </span>
               </li>
             </ul>
           </div>

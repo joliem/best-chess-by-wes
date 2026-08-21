@@ -12,19 +12,24 @@ import {
 } from "@/lib/chess";
 import { cn } from "@/lib/utils";
 
-export type GuessMark = { sq: Sq; hit: boolean };
+export type GuessMark = { sq: Sq; hit: boolean; id?: number };
 
 export function MissMarkerIcon({ className }: { className?: string }) {
   return (
-    <span
-      className={cn(
-        "inline-grid size-4 shrink-0 place-items-center rounded-full border-2 border-destructive text-xs font-black leading-none text-destructive",
-        className,
-      )}
+    <svg
+      viewBox="0 0 100 100"
+      className={cn("inline-block size-4 shrink-0 overflow-visible text-destructive", className)}
       aria-hidden="true"
     >
-      ×
-    </span>
+      <circle cx="50" cy="50" r="41" fill="none" stroke="currentColor" strokeWidth="14" />
+      <path
+        d="M24 24 76 76M76 24 24 76"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="14"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 
@@ -50,6 +55,8 @@ type Props = {
   moves: Sq[];
   lastMove: { from: Sq; to: Sq } | null;
   guesses: GuessMark[];
+  /** newest guess while its result notification is visible */
+  guessReveal?: GuessMark | null;
   /** square holding a king that is currently in check */
   checkSq?: Sq | null;
   mode: "move" | "guess" | "locked";
@@ -66,6 +73,7 @@ export function ChessBoard({
   moves,
   lastMove,
   guesses,
+  guessReveal = null,
   checkSq = null,
   mode,
   onSquare,
@@ -99,6 +107,7 @@ export function ChessBoard({
               isMove ||
               (mode === "move" && (shown?.color === viewer || overlay?.color === viewer));
             const guess = guessesBySquare.get(key(sq));
+            const revealingGuess = guessReveal && same(guessReveal.sq, sq) ? guessReveal : null;
 
             return (
               <button
@@ -113,6 +122,7 @@ export function ChessBoard({
 
                   clickable ? "cursor-pointer hover:brightness-125" : "cursor-default",
                   isSelected && "ring-4 ring-inset ring-torch",
+                  revealingGuess?.hit && "animate-coin-flip z-20",
                 )}
               >
                 <span className="pointer-events-none absolute left-1 top-0.5 text-[8px] font-semibold text-piece-dark/45">
@@ -129,8 +139,14 @@ export function ChessBoard({
                   </span>
                 )}
 
-                {guess && (
-                  <MissMarkerIcon className="pointer-events-none absolute right-1 top-1 z-30 size-[24cqmin] text-[20cqmin]" />
+                {guess && !guess.hit && !revealingGuess && (
+                  <MissMarkerIcon className="pointer-events-none absolute right-1 top-1 z-30 size-[24cqmin]" />
+                )}
+
+                {revealingGuess && !revealingGuess.hit && (
+                  <span className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
+                    <MissMarkerIcon className="size-[68cqmin] drop-shadow-[0_2px_2px_oklch(0_0_0/0.35)]" />
+                  </span>
                 )}
 
                 {visibleLastMove &&
@@ -143,7 +159,11 @@ export function ChessBoard({
                     className={cn(
                       "pointer-events-none absolute inset-0 grid place-items-center leading-none",
                       overlay && shown && "translate-x-[16%] scale-75",
-                      shown.type === "p" ? "text-[62cqmin]" : "text-[78cqmin]",
+                      shown.type === "p"
+                        ? "-translate-y-[3%] text-[62cqmin]"
+                        : shown.type === "r"
+                          ? "-translate-y-[8%] text-[73cqmin]"
+                          : "-translate-y-[8%] text-[78cqmin]",
                       shown.color === "w"
                         ? "text-piece-light [text-shadow:0_0_1px_oklch(0.2_0.03_250),0_1px_2px_oklch(0_0_0/0.55),0_0_3px_oklch(0.2_0.03_250)]"
                         : "text-piece-dark [text-shadow:0_0_1px_oklch(1_0_0/0.85),0_1px_2px_oklch(1_0_0/0.5)]",

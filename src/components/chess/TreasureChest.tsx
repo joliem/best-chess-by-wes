@@ -18,6 +18,7 @@ export function TreasureChest({
 }) {
   const mine = chest[color];
   const white = color === "w";
+  const value = mine.gold * 2 + mine.silver;
 
   const slot = (kind: CoinKind, i: number) => {
     const has = mine[kind] > i;
@@ -30,7 +31,7 @@ export function TreasureChest({
         title={has ? COIN_HELP[kind] : "Empty slot"}
         onClick={() => onSpend(kind)}
         className={cn(
-          "grid size-8 place-items-center rounded-full border-2 text-base transition",
+          "grid size-6 place-items-center rounded-full border-2 text-xs transition sm:size-7 sm:text-sm",
           has
             ? kind === "gold"
               ? "border-torch bg-torch/30 shadow-glow"
@@ -47,12 +48,10 @@ export function TreasureChest({
   return (
     <div
       className={cn(
-        "flex items-center gap-4 rounded-xl border-2 px-3 py-2",
-        white ? "border-piece-light/70 bg-piece-light/10" : "border-piece-dark bg-piece-dark/40",
-        active && "shadow-glow",
+        "grid min-w-0 grid-cols-[4rem_auto_minmax(0,1fr)] items-center gap-2 px-2 py-2",
       )}
     >
-      <div className="w-24 shrink-0 select-none" aria-hidden>
+      <div className="w-16 select-none" aria-hidden>
         <svg viewBox="0 0 100 78" className="w-full drop-shadow-[0_4px_6px_oklch(0_0_0/0.5)]">
           {(() => {
             const shell = white ? "oklch(0.99 0.01 95)" : "oklch(0.22 0.03 250)";
@@ -87,32 +86,26 @@ export function TreasureChest({
         </svg>
         <p
           className={cn(
-            "mt-1 text-center text-[11px] leading-tight",
-            white ? "text-piece-light" : "text-foreground/80",
+            "mt-1 whitespace-nowrap text-center text-[10px] leading-tight text-foreground/80",
           )}
         >
           {NAME[color]}&apos;s chest
         </p>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1">
-          <span className="w-10 text-[10px] uppercase tracking-wider text-muted-foreground">
-            Gold
-          </span>
-          {[0, 1, 2].map((i) => slot("gold", i))}
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="w-10 text-[10px] uppercase tracking-wider text-muted-foreground">
-            Silver
-          </span>
-          {[0, 1, 2].map((i) => slot("silver", i))}
-        </div>
+      <div className="min-w-0 flex flex-col gap-1">
+        <span className="text-center text-[10px] text-muted-foreground">Value {value}</span>
+        <div className="flex items-center gap-1">{[0, 1, 2].map((i) => slot("gold", i))}</div>
+        <div className="flex items-center gap-1">{[0, 1, 2].map((i) => slot("silver", i))}</div>
       </div>
-
-      {active && (
-        <span className="ml-auto text-xs text-muted-foreground">Click a coin to spend it</span>
-      )}
+      <span
+        className={cn(
+          "text-center text-[9px] leading-tight text-muted-foreground",
+          !(active && value > 0) && "invisible",
+        )}
+      >
+        Click a coin to spend
+      </span>
     </div>
   );
 }

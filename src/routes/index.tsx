@@ -68,9 +68,9 @@ const VARIANTS: Variant[] = [
     to: "/battleship",
     emoji: "🎯",
     name: "Battleship Bishop",
-    tagline: "Find and capture the hidden bishop",
+    tagline: "Find the hidden bishop before it strikes",
     blurb:
-      "A camouflaged bishop can hide beneath squares of the same color. Target and capture it before it can make a sneak attack.",
+      "A camouflaged bishop moves stealthily beneath squares of the same color. Target and capture it before it makes a sneak attack.",
     online: "battleship",
   },
 ];

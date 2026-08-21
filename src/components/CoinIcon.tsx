@@ -28,3 +28,15 @@ export function CoinIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** A compact mixed pile for the rule that introduces all hidden treasure. */
+export function CoinPileIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} role="img" aria-label="Pile of coins">
+      <circle cx="17" cy="29" r="10" fill="#e8edf2" stroke="#77818c" strokeWidth="2" />
+      <circle cx="31" cy="29" r="10" fill="#f2c14b" stroke="#8a5d0d" strokeWidth="2" />
+      <circle cx="24" cy="18" r="10" fill="#ffe08a" stroke="#8a5d0d" strokeWidth="2" />
+      <path d="M19 18h10M24 13v10" stroke="#8a5d0d" strokeWidth="2" opacity=".75" />
+    </svg>
+  );
+}

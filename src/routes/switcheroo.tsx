@@ -225,8 +225,6 @@ function SwitcherooChess() {
             </span>
           </div>
 
-          <CapturedBar lost={lost} />
-
           <SwitcherooBoard
             board={board}
             viewer={controller}
@@ -239,6 +237,8 @@ function SwitcherooChess() {
             checkSq={check ? findKing(board, check) : null}
             onSquare={onSquare}
           />
+
+          <CapturedBar lost={lost} />
 
           {selected && phase === "move" && moves.length === 0 && (
             <p className="text-center text-sm text-muted-foreground">
@@ -253,18 +253,27 @@ function SwitcherooChess() {
         <aside className="flex flex-col gap-4">
           <div className="rounded-xl border border-border bg-card p-4">
             <h2 className="mb-3 text-lg">How Switcheroo Chess works</h2>
-            <ul className="space-y-2 text-sm text-muted-foreground">
+            <ul className="space-y-2 text-sm text-muted-foreground [&>li]:grid [&>li]:grid-cols-[1.25rem_minmax(0,1fr)] [&>li]:items-start [&>li]:gap-2">
               <li>
-                🌀 Before any move there&apos;s a 1-in-10 chance the board spins into switcheroo
-                mode.
+                <span>🌀</span>
+                <span>
+                  Before any move there&apos;s a 1-in-10 chance the board spins into switcheroo
+                  mode.
+                </span>
               </li>
               <li>
-                💜 While the squares are purple &amp; green, you move your <em>opponent&apos;s</em>{" "}
-                pieces — blunder as badly as you can.
+                <span>💜</span>
+                <span>
+                  While the squares are purple &amp; green, you move your <em>opponent&apos;s</em>{" "}
+                  pieces — blunder as badly as you can.
+                </span>
               </li>
               <li>
-                🔁 Then they get one move with <em>your</em> pieces before control snaps back to
-                normal.
+                <span>🔁</span>
+                <span>
+                  Then they get one move with <em>your</em> pieces before control snaps back to
+                  normal.
+                </span>
               </li>
             </ul>
           </div>

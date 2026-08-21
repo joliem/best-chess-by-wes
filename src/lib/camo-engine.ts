@@ -25,7 +25,7 @@ import {
 import { emptyLost, sortLost, type Lost } from "@/lib/captures";
 
 export const NAME: Record<Color, string> = { w: "White", b: "Black" };
-export type GuessRecord = { sq: Sq; hit: boolean; actor: Color };
+export type GuessRecord = { sq: Sq; hit: boolean; actor: Color; id: number };
 export type Notice = { id: number; text: string } | null;
 export type CamoState = {
   board: Board;
@@ -146,9 +146,7 @@ export function maskCamoState(state: CamoState, viewer: Color | null): CamoPubli
     epTarget: state.epTarget,
     lastMove:
       state.lastMove && (!state.lastMove.hidden || over || ownHiddenMove) ? state.lastMove : null,
-    guesses: viewer
-      ? state.guesses.filter((guess) => guess.actor === viewer && !guess.hit).slice(-1)
-      : [],
+    guesses: viewer ? state.guesses.filter((guess) => guess.actor === viewer).slice(-1) : [],
     lost: state.lost,
     winner: state.winner,
     log: viewer ? state.log[viewer] : [],
@@ -215,7 +213,7 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
         ...state,
         hidden,
         hiddenCheck,
-        guesses: [...state.guesses, { sq: action.sq, hit, actor }],
+        guesses: [...state.guesses, { sq: action.sq, hit, actor, id: eventId }],
         guessingColor: null,
         phase: end.phase,
         winner: end.winner,
