@@ -7,6 +7,7 @@ import {
   sqName,
   type Board as BoardType,
   type Color,
+  type Piece,
   type Sq,
 } from "@/lib/chess";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,8 @@ export type GuessMark = { sq: Sq; hit: boolean };
 
 type Props = {
   board: BoardType;
+  /** hidden pieces visible only to this viewer, keyed by square */
+  overlays?: Record<string, Piece>;
   viewer: Color;
   /** squares scouted for good, as `r-c` keys */
   revealed: string[];
@@ -32,6 +35,7 @@ type Props = {
 
 export function ChessBoard({
   board,
+  overlays = {},
   viewer,
   revealed,
   showAll = false,
@@ -48,7 +52,7 @@ export function ChessBoard({
   // highlight would betray a hidden enemy move.
   const visibleLastMove =
     lastMove && (showAll || canSee(board, lastMove.to, viewer, revealed)) ? lastMove : null;
-  void guesses;
+  const guessesBySquare = new Map(guesses.map((guess) => [key(guess.sq), guess]));
   const rows = viewer === "w" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
   const cols = viewer === "w" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
 
@@ -60,13 +64,18 @@ export function ChessBoard({
             const sq = { r, c };
             const dark = (r + c) % 2 === 1;
             const piece = board[r]![c];
+            const overlay = overlays[key(sq)];
             const visible = showAll || canSee(board, sq, viewer, revealed);
             const shown = visible ? piece : null;
             const isMove = moveSet.has(key(sq)) && mode === "move";
             const isSelected = selected ? same(selected, sq) : false;
             const cleared = isScouted(revealed, sq);
             const scoutable = mode === "guess" && canScout(sq, viewer, revealed);
-            const clickable = scoutable || isMove || (mode === "move" && shown?.color === viewer);
+            const clickable =
+              scoutable ||
+              isMove ||
+              (mode === "move" && (shown?.color === viewer || overlay?.color === viewer));
+            const guess = guessesBySquare.get(key(sq));
 
             return (
               <button
@@ -98,6 +107,15 @@ export function ChessBoard({
                   </span>
                 )}
 
+                {guess && (
+                  <span
+                    className="pointer-events-none absolute inset-0 z-30 grid place-items-center text-[58cqmin] font-black leading-none text-destructive [text-shadow:0_1px_2px_oklch(0_0_0/0.75)]"
+                    title={guess.hit ? "Hidden bishop captured here" : "Missed target"}
+                  >
+                    ◎
+                  </span>
+                )}
+
                 {visibleLastMove &&
                   (same(visibleLastMove.to, sq) || same(visibleLastMove.from, sq)) && (
                     <span className="pointer-events-none absolute inset-0 bg-torch/20" />
@@ -107,6 +125,7 @@ export function ChessBoard({
                   <span
                     className={cn(
                       "pointer-events-none absolute inset-0 grid place-items-center leading-none",
+                      overlay && "translate-x-[16%] scale-75",
                       shown.type === "p" ? "text-[62cqmin]" : "text-[78cqmin]",
                       shown.color === "w"
                         ? "text-piece-light [text-shadow:0_0_1px_oklch(0.2_0.03_250),0_1px_2px_oklch(0_0_0/0.55),0_0_3px_oklch(0.2_0.03_250)]"
@@ -114,6 +133,20 @@ export function ChessBoard({
                     )}
                   >
                     {GLYPH[shown.color][shown.type]}
+                  </span>
+                )}
+
+                {overlay && (
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute inset-0 grid -translate-x-[16%] scale-75 place-items-center text-[78cqmin] leading-none",
+                      overlay.color === "w"
+                        ? "text-piece-light [text-shadow:0_0_1px_oklch(0.2_0.03_250),0_1px_2px_oklch(0_0_0/0.55)]"
+                        : "text-piece-dark [text-shadow:0_0_1px_oklch(1_0_0/0.85),0_1px_2px_oklch(1_0_0/0.5)]",
+                    )}
+                    title="Your hidden bishop"
+                  >
+                    {GLYPH[overlay.color][overlay.type]}
                   </span>
                 )}
 

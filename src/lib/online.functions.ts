@@ -26,13 +26,13 @@ import {
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-export const VARIANTS = ["switcheroo", "treasure", "camo"] as const;
+export const VARIANTS = ["switcheroo", "treasure", "battleship"] as const;
 export type OnlineVariant = (typeof VARIANTS)[number];
 
 export const VARIANT_NAME: Record<OnlineVariant, string> = {
   switcheroo: "Switcheroo Chess",
   treasure: "Treasure Chess",
-  camo: "Camo Chess",
+  battleship: "Battleship Bishop",
 };
 
 function makeCode(): string {
@@ -147,7 +147,7 @@ const SELECT = "id, code, variant, status, state, white_joined, black_joined";
 
 function freshState(variant: OnlineVariant) {
   if (variant === "treasure") return createTreasureState();
-  if (variant === "camo") return createCamoState();
+  if (variant === "battleship") return createCamoState();
   return createInitialState();
 }
 
@@ -156,7 +156,7 @@ function toPublic(row: GameRow, viewer: Color | null): PublicGame {
   const variant = cleanVariant(row.variant);
   let state: PublicState;
   if (variant === "treasure") state = maskTreasureState(row.state as TreasureState);
-  else if (variant === "camo") state = maskCamoState(row.state as CamoState, viewer);
+  else if (variant === "battleship") state = maskCamoState(row.state as CamoState, viewer);
   else state = row.state as SwitcherooState;
 
   return {
@@ -356,7 +356,7 @@ export const submitOnlineAction = createServerFn({ method: "POST" })
       over = outcome.state.phase === "over";
     } else {
       if (action.kind !== "move" && action.kind !== "guess") {
-        throw new Error("That isn't a Camo action.");
+        throw new Error("That isn't a Battleship Bishop action.");
       }
       const outcome = applyCamoAction(game.state as CamoState, action as CamoAction, color);
       if (!outcome.ok) throw new Error(outcome.error);

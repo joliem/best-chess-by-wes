@@ -21,13 +21,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Homemade chess variants: Switcheroo, Treasure and Camo Chess. Play any of them online with a friend on another device — no account needed.",
+          "Homemade chess variants: Switcheroo, Treasure and Battleship Bishop. Play any of them online with a friend on another device — no account needed.",
       },
       { property: "og:title", content: "Wesley's Chess Variants" },
       {
         property: "og:description",
         content:
-          "Switcheroo, Treasure and Camo Chess — pick a variant, or send a friend a link and play online.",
+          "Switcheroo, Treasure and Battleship Bishop — pick a variant, or send a friend a link and play online.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/")({
 });
 
 type Variant = {
-  to: "/switcheroo" | "/treasure" | "/camo";
+  to: "/switcheroo" | "/treasure" | "/battleship";
   emoji: string;
   name: string;
   tagline: string;
@@ -65,13 +65,13 @@ const VARIANTS: Variant[] = [
     online: "treasure",
   },
   {
-    to: "/camo",
-    emoji: "🫥",
-    name: "Camo Chess",
-    tagline: "Squares hide bishops of the same color",
+    to: "/battleship",
+    emoji: "🎯",
+    name: "Battleship Bishop",
+    tagline: "Find and sink the hidden bishop",
     blurb:
-      "Each player has one hidden bishop that's only revealed if its location is correctly guessed after it moves.",
-    online: "camo",
+      "A camouflaged bishop can hide beneath enemy pieces. Track its moves and target the right square to capture it.",
+    online: "battleship",
   },
 ];
 
@@ -128,7 +128,7 @@ function VariantHub() {
           No account needed. Pick a variant, start a game, then send the link to your opponent.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {(["switcheroo", "treasure", "camo"] as OnlineVariant[]).map((v) => (
+          {(["switcheroo", "treasure", "battleship"] as OnlineVariant[]).map((v) => (
             <button
               key={v}
               type="button"

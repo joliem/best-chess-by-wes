@@ -18,9 +18,9 @@ pass-and-play on a single screen, or online from two different devices with no a
   invincible for two enemy moves; spend a gold coin to give a piece temporary queen powers for one
   move. Kings are never eligible. If the game ends in a draw, the bigger treasure wins
   (gold = 2 silver).
-- **Camo Chess** (`/camo`) — hidden-information chess with one camouflaged piece: each side's
-  kingside bishop. Whenever the hidden bishop moves, its opponent gets one immediate guess at its
-  fixed-color square. A correct guess reveals that bishop for the rest of the game.
+- **Battleship Bishop** (`/battleship`) — each side's kingside bishop is intangible and hidden from
+  its opponent. It can share a square with an enemy piece, reveals itself if it captures, and can
+  otherwise be captured only by a correct Battleship-style target guess after it moves.
 
 ## Online play
 

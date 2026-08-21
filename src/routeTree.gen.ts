@@ -10,7 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CamoRouteImport } from './routes/camo'
+import { Route as BattleshipRouteImport } from './routes/battleship'
 import { Route as SwitcherooRouteImport } from './routes/switcheroo'
 import { Route as TreasureRouteImport } from './routes/treasure'
 import { Route as PlayCodeRouteImport } from './routes/play.$code'
@@ -20,9 +20,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CamoRoute = CamoRouteImport.update({
-  id: '/camo',
-  path: '/camo',
+const BattleshipRoute = BattleshipRouteImport.update({
+  id: '/battleship',
+  path: '/battleship',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SwitcherooRoute = SwitcherooRouteImport.update({
@@ -43,14 +43,14 @@ const PlayCodeRoute = PlayCodeRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/camo': typeof CamoRoute
+  '/battleship': typeof BattleshipRoute
   '/switcheroo': typeof SwitcherooRoute
   '/treasure': typeof TreasureRoute
   '/play/$code': typeof PlayCodeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/camo': typeof CamoRoute
+  '/battleship': typeof BattleshipRoute
   '/switcheroo': typeof SwitcherooRoute
   '/treasure': typeof TreasureRoute
   '/play/$code': typeof PlayCodeRoute
@@ -58,22 +58,28 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/camo': typeof CamoRoute
+  '/battleship': typeof BattleshipRoute
   '/switcheroo': typeof SwitcherooRoute
   '/treasure': typeof TreasureRoute
   '/play/$code': typeof PlayCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/camo' | '/switcheroo' | '/treasure' | '/play/$code'
+  fullPaths: '/' | '/battleship' | '/switcheroo' | '/treasure' | '/play/$code'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/camo' | '/switcheroo' | '/treasure' | '/play/$code'
-  id: '__root__' | '/' | '/camo' | '/switcheroo' | '/treasure' | '/play/$code'
+  to: '/' | '/battleship' | '/switcheroo' | '/treasure' | '/play/$code'
+  id:
+    | '__root__'
+    | '/'
+    | '/battleship'
+    | '/switcheroo'
+    | '/treasure'
+    | '/play/$code'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CamoRoute: typeof CamoRoute
+  BattleshipRoute: typeof BattleshipRoute
   SwitcherooRoute: typeof SwitcherooRoute
   TreasureRoute: typeof TreasureRoute
   PlayCodeRoute: typeof PlayCodeRoute
@@ -88,11 +94,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/camo': {
-      id: '/camo'
-      path: '/camo'
-      fullPath: '/camo'
-      preLoaderRoute: typeof CamoRouteImport
+    '/battleship': {
+      id: '/battleship'
+      path: '/battleship'
+      fullPath: '/battleship'
+      preLoaderRoute: typeof BattleshipRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/switcheroo': {
@@ -121,7 +127,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CamoRoute: CamoRoute,
+  BattleshipRoute: BattleshipRoute,
   SwitcherooRoute: SwitcherooRoute,
   TreasureRoute: TreasureRoute,
   PlayCodeRoute: PlayCodeRoute,

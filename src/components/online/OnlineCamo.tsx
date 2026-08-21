@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { BattleLog } from "@/components/online/OnlineSwitcheroo";
@@ -8,17 +9,23 @@ import { CapturedBar } from "@/components/chess/CapturedBar";
 import { useCaptureToast } from "@/hooks/useCaptureToast";
 import { emptyLost } from "@/lib/captures";
 import { NAME, type CamoPublicState } from "@/lib/camo-engine";
-import { CAMO_RULES } from "@/lib/fog";
 import type { OnlineProps } from "@/components/online/types";
 import { cn } from "@/lib/utils";
 
-export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineProps) {
+export function OnlineBattleship({ game, seat, sending, error, act, rematch }: OnlineProps) {
   const state = game.state as CamoPublicState;
   const viewer: Color = seat ?? "w";
   const myTurn = Boolean(seat && state.turn === seat && state.phase !== "over");
 
   const [selected, setSelected] = useState<Sq | null>(null);
   const [pending, setPending] = useState<{ from: Sq; to: Sq } | null>(null);
+  const seenNotice = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!state.notice || seenNotice.current === state.notice.id) return;
+    seenNotice.current = state.notice.id;
+    toast(state.notice.text, { icon: state.notice.text.includes("check") ? "⚔️" : "🎯" });
+  }, [state.notice]);
 
   const mode: "move" | "guess" | "locked" = !myTurn
     ? "locked"
@@ -26,8 +33,6 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
       ? "guess"
       : "move";
 
-  // The server sends the true legal moves, so blocked rays and available
-  // captures can betray a hidden enemy piece.
   const moves = useMemo(() => {
     if (!selected || mode !== "move") return [];
     return state.legal?.[key(selected)] ?? [];
@@ -52,9 +57,9 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
       return;
     }
 
-    const piece = state.board[sq.r]?.[sq.c];
+    const piece = state.overlays[key(sq)] ?? state.board[sq.r]?.[sq.c];
     if (selected && moves.some((m) => same(m, sq))) {
-      const moving = state.board[selected.r]?.[selected.c];
+      const moving = state.overlays[key(selected)] ?? state.board[selected.r]?.[selected.c];
       if (moving?.type === "p" && (sq.r === 0 || sq.r === 7)) {
         setPending({ from: selected, to: sq });
         return;
@@ -90,6 +95,7 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
 
         <ChessBoard
           board={state.board}
+          overlays={state.overlays}
           viewer={viewer}
           revealed={state.revealed}
           showAll={state.phase === "over"}
@@ -104,33 +110,31 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
 
         <CapturedBar lost={lost} viewer={seat ?? null} />
 
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-torch">How the camouflage works</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {CAMO_RULES.map((r) => r.blurb).join(" ")}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            When your opponent moves their hidden kingside bishop, you immediately get one guess at
-            its {state.guessColor ?? "light or dark"} square. Find it to reveal it for good.
-          </p>
-        </div>
         {error && <p className="text-center text-sm text-destructive">{error}</p>}
       </div>
 
       <aside className="flex flex-col gap-4">
         <div className="rounded-xl border border-border bg-card p-4">
-          <h2 className="mb-3 text-lg">Rules in effect</h2>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            {CAMO_RULES.map((r) => (
-              <li key={r.name}>
-                <strong className="text-foreground">{r.name}:</strong> {r.blurb}
-              </li>
-            ))}
+          <h2 className="mb-3 text-lg">How Battleship Bishop works</h2>
+          <ul className="space-y-3 text-sm text-muted-foreground">
             <li>
-              🔦 A correct guess reveals the bishop for the rest of the game.
+              🫥 Each player&apos;s kingside bishop is camouflaged on squares of its same color —
+              White&apos;s is hidden on light squares; Black&apos;s is hidden on dark squares. It
+              can&apos;t be captured normally, and an opponent piece can even land on its square
+              without realizing it!
             </li>
             <li>
-              👑 Your own king pulses red when he is in check, and he may never step into check.
+              🎯 If the hidden bishop moves without making a capture, the other player gets to guess
+              its location. A correct guess captures the bishop; every guess leaves a red target on
+              the board.
+            </li>
+            <li>
+              ⚔️ A hidden bishop can&apos;t move onto an occupied square unless it captures an enemy
+              piece. A capture reveals it for the rest of the game, so there is no location guess.
+            </li>
+            <li>
+              💡 The hidden bishop can give check, but beware that doing so might give away its
+              location!
             </li>
           </ul>
         </div>
@@ -150,7 +154,7 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
         <GameOver
           emoji="🏆"
           title={`${NAME[state.winner]} wins!`}
-          detail="The losing king ran out of cover — his camouflage could not save him."
+          detail="The enemy fleet has no legal escape."
           canRematch={!!seat}
           onRematch={() => void rematch()}
         />

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useState } from "react";
 
-import { OnlineCamo } from "@/components/online/OnlineCamo";
+import { OnlineBattleship } from "@/components/online/OnlineCamo";
 import { OnlineSwitcheroo } from "@/components/online/OnlineSwitcheroo";
 import { OnlineTreasure } from "@/components/online/OnlineTreasure";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ export const Route = createFileRoute("/play/$code")({
       {
         name: "description",
         content:
-          "Join a live game of Switcheroo, Treasure or Camo Chess from any device. No account needed — moves sync instantly between both players.",
+          "Join a live game of Switcheroo, Treasure or Battleship Bishop from any device. No account needed — moves sync instantly between both players.",
       },
       { property: "og:title", content: "Play a chess variant online" },
       {
@@ -188,7 +188,7 @@ function OnlineGame() {
 
       {game.variant === "switcheroo" && <OnlineSwitcheroo {...props} />}
       {game.variant === "treasure" && <OnlineTreasure {...props} />}
-      {game.variant === "camo" && <OnlineCamo {...props} />}
+      {game.variant === "battleship" && <OnlineBattleship {...props} />}
 
       <Button variant="outline" className="mx-auto w-full max-w-xs" onClick={copyLink}>
         {copied ? "Link copied!" : "Copy invite link"}

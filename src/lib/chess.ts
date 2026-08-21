@@ -358,11 +358,3 @@ export function hasAnyMove(
   }
   return false;
 }
-
-/**
- * Camo Chess uses normal chess move rules. Camouflage never lets a player
- * leave their king in check.
- */
-export function camoMoves(board: Board, from: Sq, epTarget: Sq | null = null): Sq[] {
-  return safeMoves(board, from, epTarget);
-}
