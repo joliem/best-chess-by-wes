@@ -19,7 +19,7 @@ pass-and-play on a single screen, or online from two different devices with no a
   move. Kings are never eligible. If the game ends in a draw, the bigger treasure wins
   (gold = 2 silver).
 - **Battleship Bishop** (`/battleship`) — each side's kingside bishop is intangible and hidden from
-  its opponent. It can share a square with an enemy piece, reveals itself if it captures, and can
+  its opponent. Another piece can share its square, it reveals itself if it captures, and it can
   otherwise be captured only by a correct Battleship-style target guess after it moves.
 
 ## Online play
