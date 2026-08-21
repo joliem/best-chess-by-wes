@@ -9,6 +9,7 @@ import {
   inCheck,
   GLYPH,
   initialBoard,
+  isLight,
   other,
   PIECE_NAME,
   same,
@@ -18,7 +19,7 @@ import {
   type PieceType,
   type Sq,
 } from "@/lib/chess";
-import { CAMO_RULES, isCamoBishop, isLight } from "@/lib/fog";
+import { CAMO_RULES, isCamoBishop } from "@/lib/fog";
 import { BrandMark } from "@/components/Brand";
 import { CapturedBar } from "@/components/chess/CapturedBar";
 import { lostFromBoard } from "@/lib/captures";
