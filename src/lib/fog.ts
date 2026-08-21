@@ -1,43 +1,31 @@
-import { isLight, type Board, type Color, type Sq } from "./chess";
+import { isLight, type Color, type Sq } from "./chess";
 
-/** Stable key for a square, used to track permanently scouted squares. */
+/** Stable key for a square. */
 export const skey = (s: Sq) => `${s.r}-${s.c}`;
 
+/** The one camouflaged piece per side: the kingside bishop. */
+export const CAMO_START: Record<Color, Sq> = { w: { r: 7, c: 5 }, b: { r: 0, c: 5 } };
+
 /**
- * Squares of the viewer's own colour are always clear. The opposite-colour
- * squares are the ones shrouded in camouflage until they're scouted.
+ * White's kingside bishop lives on light squares, Black's on dark squares —
+ * so a guess is always made on squares of that one shade.
  */
-export function isShroudSquare(sq: Sq, viewer: Color): boolean {
-  return isLight(sq) !== (viewer === "w");
-}
+export const camoShade = (owner: Color): "light" | "dark" => (owner === "w" ? "light" : "dark");
 
-export function isScouted(revealed: readonly string[], sq: Sq): boolean {
-  return revealed.includes(skey(sq));
-}
-
-/** Can `viewer` see whatever stands on `sq`? */
-export function canSee(board: Board, sq: Sq, viewer: Color, revealed: readonly string[]): boolean {
-  const piece = board[sq.r]?.[sq.c];
-  if (!piece) return true;
-  if (piece.color === viewer) return true;
-  if (!isShroudSquare(sq, viewer)) return true;
-  return isScouted(revealed, sq);
-}
-
-/** Can `actor` still scout this square? */
-export function canScout(sq: Sq, actor: Color, revealed: readonly string[]): boolean {
-  return isShroudSquare(sq, actor) && !isScouted(revealed, sq);
+/** Is this a square the camouflaged bishop of `owner` could possibly be on? */
+export function canGuess(sq: Sq, owner: Color): boolean {
+  return isLight(sq) === (camoShade(owner) === "light");
 }
 
 export const CAMO_RULES: Array<{ name: string; blurb: string }> = [
   {
     name: "Camouflage",
     blurb:
-      "You only see enemy pieces standing on squares of your own colour. White is blind to the dark squares, Black to the light ones.",
+      "Only one piece per side is camouflaged: the kingside bishop. Your opponent cannot see it anywhere on the board (White's hides on light squares, Black's on dark squares). Everything else is normal chess.",
   },
   {
-    name: "Battleship Scouting",
+    name: "Battleship Guess",
     blurb:
-      "After every move you pick one of your opponent's squares — dark squares if you're White, light squares if you're Black. That square loses its camouflage forever, so whatever stands there is visible from then on.",
+      "The moment your opponent moves their camouflaged bishop — you'll be told, since nothing else moved that turn — you get one guess at the square it landed on. Guess right and the bishop loses its camouflage for the rest of the game.",
   },
 ];
