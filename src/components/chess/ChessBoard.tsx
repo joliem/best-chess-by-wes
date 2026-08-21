@@ -1,7 +1,7 @@
-import { canScout, canSee, isScouted } from "@/lib/fog";
 import {
   FILES,
   GLYPH,
+  isLight,
   key,
   same,
   sqName,
@@ -14,16 +14,18 @@ import { cn } from "@/lib/utils";
 export type GuessMark = { sq: Sq; hit: boolean };
 
 type Props = {
+  /** already masked for this viewer — the enemy's camouflaged bishop is gone */
   board: BoardType;
   viewer: Color;
-  /** squares scouted for good, as `r-c` keys */
-  revealed: string[];
-  /** game over — drop the fog entirely */
-  showAll?: boolean;
   selected: Sq | null;
   moves: Sq[];
   lastMove: { from: Sq; to: Sq } | null;
+  /** the viewer's own camouflaged bishop, marked with a leaf */
+  myCamo?: Sq | null;
+  /** guesses this viewer has already made at the enemy bishop */
   guesses: GuessMark[];
+  /** in guess mode, which shade of square may be picked */
+  guessShade?: "light" | "dark" | null;
   /** square holding a king that is currently in check */
   checkSq?: Sq | null;
   mode: "move" | "guess" | "locked";
@@ -33,24 +35,21 @@ type Props = {
 export function ChessBoard({
   board,
   viewer,
-  revealed,
-  showAll = false,
   selected,
   moves,
   lastMove,
+  myCamo = null,
   guesses,
+  guessShade = null,
   checkSq = null,
   mode,
   onSquare,
 }: Props) {
   const moveSet = new Set(moves.map(key));
-  // Only trail a move the viewer is actually allowed to witness — otherwise the
-  // highlight would betray a hidden enemy move.
-  const visibleLastMove =
-    lastMove && (showAll || canSee(board, lastMove.to, viewer, revealed)) ? lastMove : null;
-  void guesses;
+  const missSet = new Set(guesses.filter((g) => !g.hit).map((g) => key(g.sq)));
   const rows = viewer === "w" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
   const cols = viewer === "w" ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
+  void missSet;
 
   return (
     <div className="mx-auto w-full max-w-[min(100%,74vh)] rounded-2xl border-4 border-frame bg-frame/25 p-1.5 shadow-deep sm:p-2">
@@ -59,14 +58,13 @@ export function ChessBoard({
           cols.map((c) => {
             const sq = { r, c };
             const dark = (r + c) % 2 === 1;
-            const piece = board[r]![c];
-            const visible = showAll || canSee(board, sq, viewer, revealed);
-            const shown = visible ? piece : null;
+            const shown = board[r]![c];
             const isMove = moveSet.has(key(sq)) && mode === "move";
             const isSelected = selected ? same(selected, sq) : false;
-            const cleared = isScouted(revealed, sq);
-            const scoutable = mode === "guess" && canScout(sq, viewer, revealed);
-            const clickable = scoutable || isMove || (mode === "move" && shown?.color === viewer);
+            const guessable =
+              mode === "guess" && !!guessShade && isLight(sq) === (guessShade === "light");
+            const clickable = guessable || isMove || (mode === "move" && shown?.color === viewer);
+            const camoHere = myCamo ? same(myCamo, sq) : false;
 
             return (
               <button
@@ -74,7 +72,7 @@ export function ChessBoard({
                 type="button"
                 disabled={!clickable}
                 onClick={() => onSquare(sq)}
-                aria-label={`${sqName(sq)}${shown ? ` ${shown.color === "w" ? "white" : "black"} ${shown.type}` : ""}${cleared ? " unhidden" : " camouflaged"}`}
+                aria-label={`${sqName(sq)}${shown ? ` ${shown.color === "w" ? "white" : "black"} ${shown.type}` : ""}${camoHere ? " camouflaged" : ""}`}
                 className={cn(
                   "@container relative aspect-square select-none transition-transform",
                   dark ? "bg-stone-dark" : "bg-stone-light",
@@ -89,19 +87,18 @@ export function ChessBoard({
                   {c === (viewer === "w" ? 0 : 7) ? 8 - r : ""}
                 </span>
 
-                {cleared && (
-                  <span
-                    className="pointer-events-none absolute right-0.5 top-0 text-[20cqmin] font-black leading-none text-destructive [text-shadow:0_0_2px_oklch(0_0_0/0.5)]"
-                    title="Camouflage cleared — this square is unhidden for good"
-                  >
-                    ✕
-                  </span>
+                {lastMove && (same(lastMove.to, sq) || same(lastMove.from, sq)) && (
+                  <span className="pointer-events-none absolute inset-0 bg-torch/20" />
                 )}
 
-                {visibleLastMove &&
-                  (same(visibleLastMove.to, sq) || same(visibleLastMove.from, sq)) && (
-                    <span className="pointer-events-none absolute inset-0 bg-torch/20" />
-                  )}
+                {camoHere && (
+                  <span
+                    className="pointer-events-none absolute right-0.5 top-0.5 text-[22cqmin] leading-none"
+                    title="Your camouflaged bishop — your opponent cannot see it"
+                  >
+                    🌿
+                  </span>
+                )}
 
                 {shown && (
                   <span
@@ -128,7 +125,7 @@ export function ChessBoard({
                   </span>
                 )}
 
-                {scoutable && (
+                {guessable && (
                   <span className="pointer-events-none absolute inset-0 ring-2 ring-inset ring-torch/40" />
                 )}
               </button>

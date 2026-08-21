@@ -14,11 +14,14 @@ import {
   type Sq,
 } from "@/lib/chess";
 import { emptyLost, sortLost, type Lost } from "@/lib/captures";
-import { canScout, canSee, skey } from "@/lib/fog";
+import { CAMO_START, camoShade, canGuess } from "@/lib/fog";
 
 export const NAME: Record<Color, string> = { w: "White", b: "Black" };
 
 export type GuessRecord = { sq: Sq; hit: boolean };
+
+/** Where each side's camouflaged kingside bishop is, and whether it is still hidden. */
+export type CamoTrack = { sq: Sq | null; hidden: boolean };
 
 export type CamoState = {
   board: Board;
@@ -27,21 +30,25 @@ export type CamoState = {
   epTarget: Sq | null;
   lastMove: { from: Sq; to: Sq } | null;
   guesses: Record<Color, GuessRecord[]>;
-  /** squares scouted for good — visible to both players */
-  revealed: string[];
-  /** pieces each colour has lost */
+  /** the camouflaged bishop of each side */
+  camo: Record<Color, CamoTrack>;
+  /** pieces each color has lost */
   lost: Lost;
   winner: Color | null;
-  /** each side keeps its own battle log so nothing leaks through the fog */
+  /** each side keeps its own battle log so nothing leaks through the camouflage */
   log: Record<Color, string[]>;
   ply: number;
 };
 
 /** One player's censored view of the game. */
-export type CamoPublicState = Omit<CamoState, "log" | "guesses" | "board"> & {
+export type CamoPublicState = Omit<CamoState, "log" | "guesses" | "board" | "camo"> & {
   board: Board;
   log: string[];
   guesses: GuessRecord[];
+  /** the viewer's own camouflaged bishop, if it is still hidden */
+  myCamo: Sq | null;
+  /** whether the enemy bishop is still camouflaged */
+  enemyHidden: boolean;
   /** true when the viewer's own king is in check */
   check: boolean;
   /** legal destinations for the viewer's pieces, keyed `r-c` (their turn only) */
@@ -49,7 +56,8 @@ export type CamoPublicState = Omit<CamoState, "log" | "guesses" | "board"> & {
 };
 
 export type CamoAction =
-  { kind: "move"; from: Sq; to: Sq; promoteTo?: PieceType } | { kind: "guess"; sq: Sq };
+  | { kind: "move"; from: Sq; to: Sq; promoteTo?: PieceType }
+  | { kind: "guess"; sq: Sq };
 
 export type CamoOutcome = { ok: true; state: CamoState } | { ok: false; error: string };
 
@@ -62,7 +70,7 @@ function tell(state: CamoState, color: Color, line: string): Record<Color, strin
 }
 
 export function createCamoState(): CamoState {
-  const opening = "White moves first. Nobody can see everything.";
+  const opening = "White moves first. Each side's kingside bishop is camouflaged.";
   return {
     board: initialBoard(),
     turn: "w",
@@ -70,7 +78,7 @@ export function createCamoState(): CamoState {
     epTarget: null,
     lastMove: null,
     guesses: { w: [], b: [] },
-    revealed: [],
+    camo: { w: { sq: CAMO_START.w, hidden: true }, b: { sq: CAMO_START.b, hidden: true } },
     lost: emptyLost(),
     winner: null,
     log: { w: [opening], b: [opening] },
@@ -78,28 +86,43 @@ export function createCamoState(): CamoState {
   };
 }
 
+function normalize(state: CamoState): CamoState {
+  return {
+    ...state,
+    lost: state.lost ?? emptyLost(),
+    camo: state.camo ?? {
+      w: { sq: CAMO_START.w, hidden: true },
+      b: { sq: CAMO_START.b, hidden: true },
+    },
+  };
+}
+
 /**
- * Strip everything `viewer` isn't allowed to know: pieces standing on squares
- * still under camouflage, the other side's guesses and log, and move trails
- * through the fog. Pass `null` for a spectator, who sees only scouted squares.
+ * Strip everything `viewer` isn't allowed to know: the enemy's camouflaged
+ * bishop, the other side's guesses and log, and the move trail whenever that
+ * bishop was the piece that moved. Pass `null` for a spectator, who sees
+ * neither camouflaged bishop.
  *
- * The legal-move map is computed on the *true* board, so a player can infer
- * hidden pieces from where their own pieces may or may not go.
+ * The legal-move map is computed on the *true* board, so a player can still
+ * infer the hidden bishop from where their own pieces may or may not go.
  */
 export function maskCamoState(state: CamoState, viewer: Color | null): CamoPublicState {
+  state = normalize(state);
   const over = state.phase === "over";
-  state = { ...state, revealed: state.revealed ?? [], lost: state.lost ?? emptyLost() };
+
+  const hiddenSquares: Sq[] = over
+    ? []
+    : (["w", "b"] as Color[])
+        .filter((c) => c !== viewer && state.camo[c].hidden && state.camo[c].sq)
+        .map((c) => state.camo[c].sq!);
+
   const board: Board = state.board.map((row, r) =>
-    row.map((piece, c) => {
-      if (!piece) return null;
-      if (over) return piece;
-      if (!viewer) return state.revealed.includes(skey({ r, c })) ? piece : null;
-      return canSee(state.board, { r, c }, viewer, state.revealed) ? piece : null;
-    }),
+    row.map((piece, c) => (hiddenSquares.some((s) => same(s, { r, c })) ? null : piece)),
   );
+
   const trailVisible =
     state.lastMove !== null &&
-    (over || (!!viewer && canSee(state.board, state.lastMove.to, viewer, state.revealed)));
+    (over || !hiddenSquares.some((s) => same(s, state.lastMove!.to)));
 
   const legal: Record<string, Sq[]> = {};
   if (viewer && !over && state.phase === "move" && state.turn === viewer) {
@@ -112,6 +135,7 @@ export function maskCamoState(state: CamoState, viewer: Color | null): CamoPubli
     }
   }
 
+  const foe = viewer ? other(viewer) : null;
   return {
     board,
     turn: state.turn,
@@ -119,7 +143,8 @@ export function maskCamoState(state: CamoState, viewer: Color | null): CamoPubli
     epTarget: state.epTarget,
     lastMove: trailVisible ? state.lastMove : null,
     guesses: viewer ? state.guesses[viewer] : [],
-    revealed: state.revealed,
+    myCamo: viewer && state.camo[viewer].hidden ? state.camo[viewer].sq : null,
+    enemyHidden: !!foe && state.camo[foe].hidden && !!state.camo[foe].sq,
     lost: state.lost,
     winner: state.winner,
     log: viewer ? state.log[viewer] : state.log.w.filter((l) => l.startsWith("🏆")),
@@ -132,7 +157,7 @@ export function maskCamoState(state: CamoState, viewer: Color | null): CamoPubli
 export function applyCamoAction(state: CamoState, action: CamoAction, actor: Color): CamoOutcome {
   if (state.phase === "over") return { ok: false, error: "This game is already over." };
   if (actor !== state.turn) return { ok: false, error: "It isn't your turn." };
-  state = { ...state, revealed: state.revealed ?? [], lost: state.lost ?? emptyLost() };
+  state = normalize(state);
 
   for (const sq of action.kind === "move" ? [action.from, action.to] : [action.sq]) {
     if (
@@ -147,35 +172,39 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
     }
   }
 
+  const foe = other(actor);
+
   if (action.kind === "guess") {
-    if (state.phase !== "guess") return { ok: false, error: "There's nothing to scout right now." };
-    if (!canScout(action.sq, actor, state.revealed)) {
-      return { ok: false, error: "Pick one of your opponent's shrouded squares." };
+    if (state.phase !== "guess") return { ok: false, error: "There's nothing to guess right now." };
+    const target = state.camo[foe];
+    if (!target.hidden || !target.sq) return { ok: false, error: "Nothing left to guess." };
+    if (!canGuess(action.sq, foe)) {
+      return { ok: false, error: `Pick a ${camoShade(foe)} square.` };
     }
-    const target = state.board[action.sq.r]?.[action.sq.c];
-    const hit = !!target && target.color !== actor;
+    const hit = same(action.sq, target.sq);
     let log = tell(
       state,
       actor,
       hit
-        ? `🔦 You unhid ${sqName(action.sq)} — an enemy ${PIECE_NAME[target!.type]} was standing there!`
-        : `🔦 You unhid ${sqName(action.sq)} — empty for now, but you'll see it from here on.`,
+        ? `🔦 You guessed ${sqName(action.sq)} — found it! The enemy bishop is exposed for good.`
+        : `🔦 You guessed ${sqName(action.sq)} — nothing there. The bishop stays camouflaged.`,
     );
     log = {
       ...log,
-      [other(actor)]: say(
-        log[other(actor)],
-        `🔦 ${NAME[actor]} unhid ${sqName(action.sq)} — that square has lost its camouflage.`,
+      [foe]: say(
+        log[foe],
+        hit
+          ? `🫥 ${NAME[actor]} guessed ${sqName(action.sq)} and found your bishop — it's exposed now.`
+          : `🫥 ${NAME[actor]} guessed ${sqName(action.sq)} and missed. Your bishop stays hidden.`,
       ),
     };
     return {
       ok: true,
       state: {
         ...state,
-        revealed: [...state.revealed, skey(action.sq)],
+        camo: { ...state.camo, [foe]: { ...target, hidden: !hit } },
         guesses: { ...state.guesses, [actor]: [...state.guesses[actor], { sq: action.sq, hit }] },
         phase: "move",
-        turn: other(actor),
         log,
       },
     };
@@ -189,12 +218,23 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
 
   const legal = camoMoves(state.board, from, state.epTarget);
   if (!legal.some((m) => same(m, to))) {
-    return { ok: false, error: "Something hidden blocks that move — try another one." };
+    return { ok: false, error: "That move isn't legal — try another one." };
   }
 
   const promoteTo: PieceType =
     mover.type === "p" && (to.r === 0 || to.r === 7) ? (action.promoteTo ?? "q") : "q";
   const result = applyMove(state.board, from, to, state.epTarget, promoteTo);
+
+  // Follow the camouflaged bishops: the mover's may have moved, the foe's may
+  // have just been captured.
+  const mine = state.camo[actor];
+  const theirs = state.camo[foe];
+  const movedCamo = !!mine.sq && same(mine.sq, from);
+  const camo: Record<Color, CamoTrack> = {
+    ...state.camo,
+    [actor]: movedCamo ? { ...mine, sq: to } : mine,
+    [foe]: theirs.sq && same(theirs.sq, to) ? { sq: null, hidden: false } : theirs,
+  };
 
   const capture = result.captured
     ? ` and captured a ${PIECE_NAME[result.captured.type]}${result.enPassant ? " en passant" : ""}`
@@ -209,10 +249,14 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
         }.`,
   );
 
-  const foe = other(actor);
-  const foeLine = result.captured
-    ? `⚔️ Your ${PIECE_NAME[result.captured.type]} on ${sqName(to)} was captured!`
-    : "🌫️ Your opponent moved somewhere in the fog.";
+  const hideMove = movedCamo && mine.hidden;
+  const foeLine = hideMove
+    ? `🫥 ${NAME[actor]} moved their camouflaged bishop — guess which ${camoShade(actor)} square it's on!`
+    : result.captured
+      ? `⚔️ Your ${PIECE_NAME[result.captured.type]} on ${sqName(to)} was captured!`
+      : `${NAME[actor]} played ${PIECE_NAME[mover.type]} to ${sqName(to)}${
+          result.captured ? " with a capture" : ""
+        }.`;
   log = { ...log, [foe]: say(log[foe], foeLine) };
 
   const lost: Lost = result.captured
@@ -239,6 +283,7 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
         epTarget: result.epTarget,
         phase: "over",
         winner: actor,
+        camo,
         lost,
         ply: state.ply + 1,
         log,
@@ -246,7 +291,6 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
     };
   }
 
-  const stillShrouded = state.revealed.length < 32;
   return {
     ok: true,
     state: {
@@ -254,8 +298,11 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
       board: result.board,
       lastMove: { from, to },
       epTarget: result.epTarget,
-      phase: stillShrouded ? "guess" : "move",
-      turn: stillShrouded ? actor : foe,
+      // The foe always moves next; if the camouflaged bishop just moved they
+      // first get one Battleship guess at where it went.
+      phase: hideMove ? "guess" : "move",
+      turn: foe,
+      camo,
       lost,
       ply: state.ply + 1,
       log,

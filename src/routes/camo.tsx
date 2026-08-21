@@ -1,44 +1,36 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ChessBoard, type GuessMark } from "@/components/chess/ChessBoard";
+import { ChessBoard } from "@/components/chess/ChessBoard";
 import { Button } from "@/components/ui/button";
+import { findKing, GLYPH, key, other, PIECE_NAME, same, sqName, type Color, type PieceType, type Sq } from "@/lib/chess";
+import { CAMO_RULES, camoShade } from "@/lib/fog";
 import {
-  applyMove,
-  camoMoves,
-  findKing,
-  inCheck,
-  GLYPH,
-  initialBoard,
-  other,
-  PIECE_NAME,
-  same,
-  sqName,
-  type Board,
-  type Color,
-  type PieceType,
-  type Sq,
-} from "@/lib/chess";
-import { CAMO_RULES, canScout, skey } from "@/lib/fog";
+  applyCamoAction,
+  createCamoState,
+  maskCamoState,
+  NAME,
+  type CamoAction,
+  type CamoState,
+} from "@/lib/camo-engine";
 import { BrandMark } from "@/components/Brand";
 import { CapturedBar } from "@/components/chess/CapturedBar";
-import { lostFromBoard } from "@/lib/captures";
 import { useCaptureToast } from "@/hooks/useCaptureToast";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/camo")({
   head: () => ({
     meta: [
-      { title: "Camo Chess — Fog, Camouflage & Bluffing" },
+      { title: "Camo Chess — One Hidden Bishop & Battleship Guesses" },
       {
         name: "description",
         content:
-          "Two-player chess with hidden information: camouflaged squares and Battleship-style scouting that clears the fog for good.",
+          "Two-player chess with one twist: each side's kingside bishop is camouflaged. Guess where it moved to strip its camouflage for good.",
       },
-      { property: "og:title", content: "Camo Chess — Fog, Camouflage & Bluffing" },
+      { property: "og:title", content: "Camo Chess — One Hidden Bishop" },
       {
         property: "og:description",
         content:
-          "Real chess rules, but half the board is camouflaged. Scout a square each turn to clear it forever. Pass and play on one device.",
+          "Real chess rules, but your opponent's kingside bishop is invisible until you guess the square it moved to. Pass and play on one device.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -47,121 +39,77 @@ export const Route = createFileRoute("/camo")({
   component: CamoChess,
 });
 
-const NAME: Record<Color, string> = { w: "White", b: "Black" };
-
-type Phase = "move" | "promote" | "guess" | "handoff" | "over";
-
 const PROMOTIONS: PieceType[] = ["q", "r", "b", "n"];
 
 function CamoChess() {
-  const [board, setBoard] = useState<Board>(() => initialBoard());
-  const [turn, setTurn] = useState<Color>("w");
-  const [phase, setPhase] = useState<Phase>("move");
+  const [game, setGame] = useState<CamoState>(() => createCamoState());
+  const [viewer, setViewer] = useState<Color>("w");
   const [selected, setSelected] = useState<Sq | null>(null);
-  const [lastMove, setLastMove] = useState<{ from: Sq; to: Sq } | null>(null);
-  const [guesses, setGuesses] = useState<Record<Color, GuessMark[]>>({ w: [], b: [] });
-  const [revealed, setRevealed] = useState<string[]>([]);
-  const [winner, setWinner] = useState<Color | null>(null);
-  const [log, setLog] = useState<string[]>(["White moves first. Nobody can see everything."]);
-  const [epTarget, setEpTarget] = useState<Sq | null>(null);
   const [pending, setPending] = useState<{ from: Sq; to: Sq } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const view = useMemo(() => maskCamoState(game, viewer), [game, viewer]);
+  useCaptureToast(view.lost, viewer);
+
+  const over = view.phase === "over";
+  const handoff = !over && game.turn !== viewer;
+  const mode: "move" | "guess" | "locked" = handoff
+    ? "locked"
+    : view.phase === "guess"
+      ? "guess"
+      : view.phase === "move"
+        ? "move"
+        : "locked";
 
   const moves = useMemo(
-    () => (selected && phase === "move" ? camoMoves(board, selected, epTarget) : []),
-    [board, selected, phase, epTarget],
+    () => (selected && mode === "move" ? (view.legal[key(selected)] ?? []) : []),
+    [selected, mode, view],
   );
 
-  const lost = useMemo(() => lostFromBoard(board), [board]);
-  useCaptureToast(lost);
-
-  const say = (line: string) => setLog((l) => [line, ...l].slice(0, 7));
+  function act(action: CamoAction) {
+    const result = applyCamoAction(game, action, game.turn);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+    setSelected(null);
+    setPending(null);
+    setGame(result.state);
+  }
 
   function reset() {
-    setBoard(initialBoard());
-    setTurn("w");
-    setPhase("move");
-    setSelected(null);
-    setLastMove(null);
-    setGuesses({ w: [], b: [] });
-    setRevealed([]);
-    setWinner(null);
-    setEpTarget(null);
-    setPending(null);
-    setLog(["A fresh board. White moves first."]);
-  }
-
-  function commitMove(from: Sq, to: Sq, promoteTo: PieceType = "q") {
-    const mover = board[from.r]![from.c]!;
-    const result = applyMove(board, from, to, epTarget, promoteTo);
-    setBoard(result.board);
-    setLastMove({ from, to });
+    setGame(createCamoState());
+    setViewer("w");
     setSelected(null);
     setPending(null);
-    setEpTarget(result.epTarget);
-    const capture = result.captured
-      ? ` and captured a ${PIECE_NAME[result.captured.type]}${result.enPassant ? " en passant" : ""}`
-      : "";
-    say(
-      result.castled
-        ? `${NAME[turn]} castled ${result.castled}side — king and rook swapped places.`
-        : `${NAME[turn]} played ${PIECE_NAME[mover.type]} to ${sqName(to)}${capture}${
-            result.promoted ? ` — promoted to ${PIECE_NAME[promoteTo]}!` : ""
-          }.`,
-    );
-    if (result.kingTaken) {
-      setWinner(turn);
-      setPhase("over");
-      return;
-    }
-    if (revealed.length < 32) {
-      setPhase("guess");
-      return;
-    }
-    endTurn();
-  }
-
-  function endTurn() {
-    setSelected(null);
-    setPhase("handoff");
+    setError(null);
   }
 
   function onSquare(sq: Sq) {
-    if (phase === "guess") {
-      if (!canScout(sq, turn, revealed)) return;
-      const target = board[sq.r]![sq.c];
-      const hit = !!target && target.color !== turn;
-      setRevealed((r) => [...r, skey(sq)]);
-      setGuesses((g) => ({ ...g, [turn]: [...g[turn], { sq, hit }] }));
-      say(
-        hit
-          ? `🔦 ${NAME[turn]} scouted ${sqName(sq)} — an enemy ${PIECE_NAME[target!.type]} was hiding there!`
-          : `🔦 ${NAME[turn]} scouted ${sqName(sq)} — clear for good, but empty right now.`,
-      );
-      endTurn();
+    if (handoff || over) return;
+
+    if (mode === "guess") {
+      act({ kind: "guess", sq });
       return;
     }
 
-    if (phase !== "move") return;
-    const piece = board[sq.r]![sq.c];
-
+    const piece = view.board[sq.r]?.[sq.c];
     if (selected && moves.some((m) => same(m, sq))) {
-      const mover = board[selected.r]![selected.c]!;
+      const mover = view.board[selected.r]![selected.c]!;
       if (mover.type === "p" && (sq.r === 0 || sq.r === 7)) {
         setPending({ from: selected, to: sq });
-        setPhase("promote");
         return;
       }
-      commitMove(selected, sq);
+      act({ kind: "move", from: selected, to: sq });
       return;
     }
-
-    if (piece && piece.color === turn) {
+    if (piece && piece.color === viewer) {
       setSelected(selected && same(selected, sq) ? null : sq);
     }
   }
 
-  const viewer = turn;
-  const boardMode = phase === "guess" ? "guess" : phase === "move" ? "move" : "locked";
+  const enemyShade = camoShade(other(viewer));
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 px-3 py-4">
@@ -170,7 +118,7 @@ function CamoChess() {
         <p className="text-sm uppercase tracking-[0.35em] text-torch">Wesley&apos;s</p>
         <h1 className="text-4xl text-foreground sm:text-5xl">Camo Chess</h1>
         <p className="mt-2 text-muted-foreground">
-          Real chess rules — but some enemy pieces are hidden on the battlefield.
+          Real chess rules — but each side&apos;s kingside bishop is hidden from the enemy.
         </p>
       </header>
 
@@ -179,37 +127,37 @@ function CamoChess() {
           <div
             className={cn(
               "mx-auto flex w-fit max-w-full items-center justify-center rounded-xl border border-border bg-card px-5 py-2 text-center",
-              phase === "guess" && "border-torch",
+              mode === "guess" && "border-torch",
             )}
           >
             <span className="text-lg">
-              {phase === "guess"
-                ? `${NAME[turn]}: unhide one ${turn === "w" ? "dark" : "light"} square`
-                : phase === "promote"
-                  ? "Choose a promotion"
-                  : phase === "handoff"
-                    ? "Pass the device"
-                    : phase === "over"
-                      ? "Game over"
-                      : `${NAME[turn]} to move`}
+              {over
+                ? "Game over"
+                : handoff
+                  ? "Pass the device"
+                  : mode === "guess"
+                    ? `${NAME[viewer]}: guess a ${enemyShade} square`
+                    : `${NAME[game.turn]} to move`}
             </span>
           </div>
 
           <ChessBoard
-            board={board}
+            board={view.board}
             viewer={viewer}
-            revealed={revealed}
-            showAll={phase === "over"}
             selected={selected}
             moves={moves}
-            lastMove={lastMove}
-            guesses={guesses[viewer]}
-            checkSq={phase !== "over" && inCheck(board, viewer) ? findKing(board, viewer) : null}
-            mode={boardMode}
+            lastMove={view.lastMove}
+            myCamo={view.myCamo}
+            guesses={view.guesses}
+            guessShade={mode === "guess" ? enemyShade : null}
+            checkSq={view.check ? findKing(view.board, viewer) : null}
+            mode={mode}
             onSquare={onSquare}
           />
 
-          <CapturedBar lost={lost} />
+          <CapturedBar lost={view.lost} viewer={viewer} />
+
+          {error && <p className="text-center text-sm text-destructive">{error}</p>}
 
           <div className="rounded-xl border border-border bg-card px-4 py-3">
             <p className="text-xs uppercase tracking-[0.2em] text-torch">
@@ -219,8 +167,8 @@ function CamoChess() {
               {CAMO_RULES.map((r) => r.blurb).join(" ")}
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Tap one of your opponent&apos;s {turn === "w" ? "dark" : "light"} squares to unhide it
-              forever — unhidden squares are marked with a red ✕.
+              Your own camouflaged bishop is marked with a 🌿. Your opponent&apos;s bishop hides on{" "}
+              {enemyShade} squares — when they move it, you get one guess.
             </p>
           </div>
         </div>
@@ -234,10 +182,7 @@ function CamoChess() {
                   <strong className="text-foreground">{rule.name}:</strong> {rule.blurb}
                 </li>
               ))}
-              <li>
-                ❌ A red ✕ marks a square whose camouflage is gone. Both players see the same ✕
-                marks.
-              </li>
+              <li>🌿 A leaf marks your own camouflaged bishop — only you can see it.</li>
               <li>👑 Your king pulses red in check, and he can never step into check.</li>
             </ul>
           </div>
@@ -245,7 +190,7 @@ function CamoChess() {
           <div className="rounded-xl border border-border bg-card p-4">
             <h2 className="mb-2 text-lg">Battle Log</h2>
             <ul className="space-y-1 text-sm text-muted-foreground">
-              {log.map((line, i) => (
+              {view.log.map((line, i) => (
                 <li key={`${i}-${line}`} className={i === 0 ? "text-foreground" : ""}>
                   {line}
                 </li>
@@ -259,7 +204,7 @@ function CamoChess() {
         </aside>
       </div>
 
-      {phase === "promote" && pending && (
+      {pending && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 px-4">
           <div className="max-w-sm rounded-2xl border border-border bg-card p-8 text-center shadow-deep">
             <h2 className="text-3xl">Promote your Pawn!</h2>
@@ -271,11 +216,11 @@ function CamoChess() {
                 <button
                   key={t}
                   type="button"
-                  onClick={() => commitMove(pending.from, pending.to, t)}
+                  onClick={() => act({ kind: "move", from: pending.from, to: pending.to, promoteTo: t })}
                   className="rounded-xl border border-border bg-background py-3 text-4xl hover:border-torch"
                   aria-label={PIECE_NAME[t]}
                 >
-                  {GLYPH[turn][t]}
+                  {GLYPH[viewer][t]}
                 </button>
               ))}
             </div>
@@ -283,32 +228,32 @@ function CamoChess() {
         </div>
       )}
 
-      {phase === "handoff" && (
+      {handoff && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background px-4">
           <div className="max-w-sm rounded-2xl border border-border bg-card p-8 text-center shadow-deep">
-            <div className="text-6xl">{other(turn) === "w" ? "♔" : "♚"}</div>
-            <h2 className="mt-4 text-3xl">Pass to {NAME[other(turn)]}</h2>
+            <div className="text-6xl">{game.turn === "w" ? "♔" : "♚"}</div>
+            <h2 className="mt-4 text-3xl">Pass to {NAME[game.turn]}</h2>
             <p className="mt-2 text-muted-foreground">
               No peeking! Hand the device over, then tap below to see your own view of the board.
             </p>
             <Button
               className="mt-6 w-full"
               onClick={() => {
-                setTurn(other(turn));
-                setPhase("move");
+                setViewer(game.turn);
+                setSelected(null);
               }}
             >
-              I&apos;m {NAME[other(turn)]} — show my board
+              I&apos;m {NAME[game.turn]} — show my board
             </Button>
           </div>
         </div>
       )}
 
-      {phase === "over" && winner && (
+      {over && view.winner && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 px-4">
           <div className="max-w-sm rounded-2xl border border-border bg-card p-8 text-center shadow-deep">
             <div className="text-6xl">🏆</div>
-            <h2 className="mt-4 text-3xl">{NAME[winner]} wins!</h2>
+            <h2 className="mt-4 text-3xl">{NAME[view.winner]} wins!</h2>
             <p className="mt-2 text-muted-foreground">
               The losing king ran out of cover — his camouflage could not save him.
             </p>
