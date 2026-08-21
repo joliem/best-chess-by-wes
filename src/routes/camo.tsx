@@ -18,7 +18,7 @@ import {
   type PieceType,
   type Sq,
 } from "@/lib/chess";
-import { CAMO_RULES, canScout, skey } from "@/lib/fog";
+import { CAMO_RULES, isCamoBishop, isLight } from "@/lib/fog";
 import { BrandMark } from "@/components/Brand";
 import { CapturedBar } from "@/components/chess/CapturedBar";
 import { lostFromBoard } from "@/lib/captures";
@@ -65,6 +65,7 @@ function CamoChess() {
   const [log, setLog] = useState<string[]>(["White moves first. Nobody can see everything."]);
   const [epTarget, setEpTarget] = useState<Sq | null>(null);
   const [pending, setPending] = useState<{ from: Sq; to: Sq } | null>(null);
+  const [guessingBishop, setGuessingBishop] = useState<{ id: string; color: Color } | null>(null);
 
   const moves = useMemo(
     () => (selected && phase === "move" ? camoMoves(board, selected, epTarget) : []),
@@ -87,6 +88,7 @@ function CamoChess() {
     setWinner(null);
     setEpTarget(null);
     setPending(null);
+    setGuessingBishop(null);
     setLog(["A fresh board. White moves first."]);
   }
 
@@ -113,10 +115,7 @@ function CamoChess() {
       setPhase("over");
       return;
     }
-    if (revealed.length < 32) {
-      setPhase("guess");
-      return;
-    }
+    if (isCamoBishop(mover) && !mover.revealed) setGuessingBishop({ id: mover.id, color: mover.color });
     endTurn();
   }
 
@@ -127,16 +126,17 @@ function CamoChess() {
 
   function onSquare(sq: Sq) {
     if (phase === "guess") {
-      if (!canScout(sq, turn, revealed)) return;
+      if (!guessingBishop || isLight(sq) !== (guessingBishop.color === "w")) return;
       const target = board[sq.r]![sq.c];
-      const hit = !!target && target.color !== turn;
-      setRevealed((r) => [...r, skey(sq)]);
+      const hit = target?.id === guessingBishop.id;
+      if (hit) setBoard((b) => b.map((row) => row.map((p) => p?.id === guessingBishop.id ? { ...p, revealed: true } : p)));
       setGuesses((g) => ({ ...g, [turn]: [...g[turn], { sq, hit }] }));
       say(
         hit
-          ? `🔦 ${NAME[turn]} scouted ${sqName(sq)} — an enemy ${PIECE_NAME[target!.type]} was hiding there!`
-          : `🔦 ${NAME[turn]} scouted ${sqName(sq)} — clear for good, but empty right now.`,
+          ? `🔦 ${NAME[turn]} found the camouflaged bishop on ${sqName(sq)} — it is revealed for good!`
+          : `🔦 ${NAME[turn]} guessed ${sqName(sq)} but missed the camouflaged bishop.`,
       );
+      setGuessingBishop(null);
       endTurn();
       return;
     }
@@ -184,7 +184,7 @@ function CamoChess() {
           >
             <span className="text-lg">
               {phase === "guess"
-                ? `${NAME[turn]}: unhide one ${turn === "w" ? "dark" : "light"} square`
+                ? `${NAME[turn]}: guess the camouflaged bishop's ${guessingBishop?.color === "w" ? "light" : "dark"} square`
                 : phase === "promote"
                   ? "Choose a promotion"
                   : phase === "handoff"
@@ -219,8 +219,8 @@ function CamoChess() {
               {CAMO_RULES.map((r) => r.blurb).join(" ")}
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Tap one of your opponent&apos;s {turn === "w" ? "dark" : "light"} squares to unhide it
-              forever — unhidden squares are marked with a red ✕.
+              When your opponent moves their hidden kingside bishop, you immediately get one guess
+              at its light or dark square. Find it to reveal it for good.
             </p>
           </div>
         </div>
@@ -235,8 +235,7 @@ function CamoChess() {
                 </li>
               ))}
               <li>
-                ❌ A red ✕ marks a square whose camouflage is gone. Both players see the same ✕
-                marks.
+                🔦 A correct guess reveals the bishop for the rest of the game.
               </li>
               <li>👑 Your king pulses red in check, and he can never step into check.</li>
             </ul>
@@ -294,8 +293,9 @@ function CamoChess() {
             <Button
               className="mt-6 w-full"
               onClick={() => {
-                setTurn(other(turn));
-                setPhase("move");
+                const next = other(turn);
+                setTurn(next);
+                setPhase(guessingBishop ? "guess" : "move");
               }}
             >
               I&apos;m {NAME[other(turn)]} — show my board

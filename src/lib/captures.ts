@@ -5,7 +5,7 @@ const START: Record<PieceType, number> = { p: 8, n: 2, b: 2, r: 2, q: 1, k: 1 };
 export const PIECE_VALUE: Record<PieceType, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const ORDER: PieceType[] = ["q", "r", "b", "n", "p", "k"];
 
-/** Pieces each colour has lost, keyed by the colour that lost them. */
+/** Pieces each color has lost, keyed by the color that lost them. */
 export type Lost = Record<Color, PieceType[]>;
 
 export const emptyLost = (): Lost => ({ w: [], b: [] });

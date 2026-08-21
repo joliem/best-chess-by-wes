@@ -8,7 +8,7 @@ import { CapturedBar } from "@/components/chess/CapturedBar";
 import { useCaptureToast } from "@/hooks/useCaptureToast";
 import { emptyLost } from "@/lib/captures";
 import { NAME, type CamoPublicState } from "@/lib/camo-engine";
-import { canScout, CAMO_RULES } from "@/lib/fog";
+import { CAMO_RULES } from "@/lib/fog";
 import type { OnlineProps } from "@/components/online/types";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
     if (!myTurn || sending) return;
 
     if (mode === "guess") {
-      if (!canScout(sq, viewer, state.revealed)) return;
+      if ((sq.r + sq.c) % 2 !== (state.guessColor === "light" ? 0 : 1)) return;
       void act({ kind: "guess", sq });
       return;
     }
@@ -80,7 +80,7 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
             {state.phase === "over"
               ? "Game over"
               : state.phase === "guess"
-                ? `${NAME[state.turn]}: unhide one ${state.turn === "w" ? "dark" : "light"} square`
+                ? `${NAME[state.turn]}: guess the camouflaged bishop's ${state.guessColor} square`
                 : `${NAME[state.turn]} to move`}
           </span>
           <span className="text-sm text-muted-foreground">
@@ -110,8 +110,8 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
             {CAMO_RULES.map((r) => r.blurb).join(" ")}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Tap one of your opponent&apos;s {viewer === "w" ? "dark" : "light"} squares to unhide it
-            forever — unhidden squares are marked with a red ✕.
+            When your opponent moves their hidden kingside bishop, you immediately get one guess at
+            its {state.guessColor ?? "light or dark"} square. Find it to reveal it for good.
           </p>
         </div>
         {error && <p className="text-center text-sm text-destructive">{error}</p>}
@@ -127,7 +127,7 @@ export function OnlineCamo({ game, seat, sending, error, act, rematch }: OnlineP
               </li>
             ))}
             <li>
-              ❌ A red ✕ marks a square whose camouflage is gone. Both players see the same ✕ marks.
+              🔦 A correct guess reveals the bishop for the rest of the game.
             </li>
             <li>
               👑 Your own king pulses red when he is in check, and he may never step into check.

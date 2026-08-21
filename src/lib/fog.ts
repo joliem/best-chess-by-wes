@@ -1,14 +1,18 @@
-import { isLight, type Board, type Color, type Sq } from "./chess";
+import { isLight, type Board, type Color, type Piece, type Sq } from "./chess";
 
 /** Stable key for a square, used to track permanently scouted squares. */
 export const skey = (s: Sq) => `${s.r}-${s.c}`;
 
 /**
- * Squares of the viewer's own colour are always clear. The opposite-colour
- * squares are the ones shrouded in camouflage until they're scouted.
+ * The kingside bishop is the only camouflaged piece. It starts on f1/f8 and
+ * stays hidden from the opponent until they correctly guess its square.
  */
 export function isShroudSquare(sq: Sq, viewer: Color): boolean {
   return isLight(sq) !== (viewer === "w");
+}
+
+export function isCamoBishop(piece: Piece): boolean {
+  return piece.type === "b" && (piece.id === "w-b-5" || piece.id === "b-b-5");
 }
 
 export function isScouted(revealed: readonly string[], sq: Sq): boolean {
@@ -20,8 +24,7 @@ export function canSee(board: Board, sq: Sq, viewer: Color, revealed: readonly s
   const piece = board[sq.r]?.[sq.c];
   if (!piece) return true;
   if (piece.color === viewer) return true;
-  if (!isShroudSquare(sq, viewer)) return true;
-  return isScouted(revealed, sq);
+  return !isCamoBishop(piece) || piece.revealed;
 }
 
 /** Can `actor` still scout this square? */
@@ -33,11 +36,11 @@ export const CAMO_RULES: Array<{ name: string; blurb: string }> = [
   {
     name: "Camouflage",
     blurb:
-      "You only see enemy pieces standing on squares of your own colour. White is blind to the dark squares, Black to the light ones.",
+      "Only your opponent's kingside bishop is camouflaged. White's is always on light squares; Black's is always on dark squares.",
   },
   {
-    name: "Battleship Scouting",
+    name: "One Guess per Move",
     blurb:
-      "After every move you pick one of your opponent's squares — dark squares if you're White, light squares if you're Black. That square loses its camouflage forever, so whatever stands there is visible from then on.",
+      "Every time the hidden bishop moves, you immediately get one guess at its light or dark square. Guess correctly and it is revealed for the rest of the game; miss and it remains hidden until it moves again.",
   },
 ];

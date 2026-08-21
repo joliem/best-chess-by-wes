@@ -327,6 +327,8 @@ export function safeMoves(
   const buffed = type !== piece.type;
   return legalMoves(board, from, epTarget, type).filter((to) => {
     const target = board[to.r]![to.c];
+    // Kings are never captured in chess; checkmate ends the game first.
+    if (target?.type === "k") return false;
     if (target && target.color !== color && shieldedIds.includes(target.id)) return false;
     if (piece.type === "k" && Math.abs(to.c - from.c) === 2) {
       if (inCheck(board, color, buff)) return false;
@@ -358,23 +360,9 @@ export function hasAnyMove(
 }
 
 /**
- * Camo chess moves: pseudo-legal for every piece (pins are invisible in the
- * fog), but the king may never step into an attacked square or castle through
- * one — kings still play by real chess rules.
+ * Camo Chess uses normal chess move rules. Camouflage never lets a player
+ * leave their king in check.
  */
 export function camoMoves(board: Board, from: Sq, epTarget: Sq | null = null): Sq[] {
-  const piece = board[from.r]?.[from.c];
-  if (!piece) return [];
-  const moves = legalMoves(board, from, epTarget);
-  if (piece.type !== "k") return moves;
-  const color = piece.color;
-  return moves.filter((to) => {
-    if (Math.abs(to.c - from.c) === 2) {
-      if (inCheck(board, color)) return false;
-      const step = to.c > from.c ? 1 : -1;
-      const mid = applyMove(board, from, { r: from.r, c: from.c + step }, null).board;
-      if (inCheck(mid, color)) return false;
-    }
-    return !inCheck(applyMove(board, from, to, epTarget).board, color);
-  });
+  return safeMoves(board, from, epTarget);
 }

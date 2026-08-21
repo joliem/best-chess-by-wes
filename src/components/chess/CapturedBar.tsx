@@ -12,7 +12,7 @@ function Row({
 }: {
   label: string;
   pieces: PieceType[];
-  /** colour of the captured pieces */
+  /** color of the captured pieces */
   color: Color;
   edge?: number;
 }) {

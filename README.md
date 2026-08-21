@@ -18,10 +18,9 @@ pass-and-play on a single screen, or online from two different devices with no a
   invincible for two enemy moves; spend a gold coin to give a piece temporary queen powers for one
   move. Kings are never eligible. If the game ends in a draw, the bigger treasure wins
   (gold = 2 silver).
-- **Camo Chess** (`/camo`) — hidden-information chess. All squares on the board start out with
-  camouflage that hides pieces of the same color as them from the enemy. After each move, the
-  "Battleship" rule lets a player choose one of the enemy squares to permanently remove its
-  camouflage powers.
+- **Camo Chess** (`/camo`) — hidden-information chess with one camouflaged piece: each side's
+  kingside bishop. Whenever the hidden bishop moves, its opponent gets one immediate guess at its
+  fixed-color square. A correct guess reveals that bishop for the rest of the game.
 
 ## Online play
 

@@ -70,7 +70,7 @@ const VARIANTS: Variant[] = [
     name: "Camo Chess",
     tagline: "Squares hide pieces of the same color",
     blurb:
-      "Hidden information chess: camouflaged squares and battleship-style scouting to clear the fog.",
+      "One hidden kingside bishop, plus a single immediate guess whenever it moves.",
     online: "camo",
   },
 ];

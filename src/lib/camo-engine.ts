@@ -1,8 +1,10 @@
 import {
   applyMove,
   camoMoves,
+  hasAnyMove,
   inCheck,
   initialBoard,
+  isLight,
   key,
   other,
   PIECE_NAME,
@@ -14,7 +16,7 @@ import {
   type Sq,
 } from "@/lib/chess";
 import { emptyLost, sortLost, type Lost } from "@/lib/captures";
-import { canScout, canSee, skey } from "@/lib/fog";
+import { canSee, isCamoBishop } from "@/lib/fog";
 
 export const NAME: Record<Color, string> = { w: "White", b: "Black" };
 
@@ -24,12 +26,14 @@ export type CamoState = {
   board: Board;
   turn: Color;
   phase: "move" | "guess" | "over";
+  /** Hidden bishop eligible for the immediate post-move guess. */
+  guessingBishop: { id: string; color: Color } | null;
   epTarget: Sq | null;
   lastMove: { from: Sq; to: Sq } | null;
   guesses: Record<Color, GuessRecord[]>;
   /** squares scouted for good — visible to both players */
   revealed: string[];
-  /** pieces each colour has lost */
+  /** pieces each color has lost */
   lost: Lost;
   winner: Color | null;
   /** each side keeps its own battle log so nothing leaks through the fog */
@@ -38,7 +42,7 @@ export type CamoState = {
 };
 
 /** One player's censored view of the game. */
-export type CamoPublicState = Omit<CamoState, "log" | "guesses" | "board"> & {
+export type CamoPublicState = Omit<CamoState, "log" | "guesses" | "board" | "guessingBishop"> & {
   board: Board;
   log: string[];
   guesses: GuessRecord[];
@@ -46,6 +50,7 @@ export type CamoPublicState = Omit<CamoState, "log" | "guesses" | "board"> & {
   check: boolean;
   /** legal destinations for the viewer's pieces, keyed `r-c` (their turn only) */
   legal: Record<string, Sq[]>;
+  guessColor: "light" | "dark" | null;
 };
 
 export type CamoAction =
@@ -67,6 +72,7 @@ export function createCamoState(): CamoState {
     board: initialBoard(),
     turn: "w",
     phase: "move",
+    guessingBishop: null,
     epTarget: null,
     lastMove: null,
     guesses: { w: [], b: [] },
@@ -88,7 +94,7 @@ export function createCamoState(): CamoState {
  */
 export function maskCamoState(state: CamoState, viewer: Color | null): CamoPublicState {
   const over = state.phase === "over";
-  state = { ...state, revealed: state.revealed ?? [], lost: state.lost ?? emptyLost() };
+  state = { ...state, revealed: state.revealed ?? [], lost: state.lost ?? emptyLost(), guessingBishop: state.guessingBishop ?? null };
   const board: Board = state.board.map((row, r) =>
     row.map((piece, c) => {
       if (!piece) return null;
@@ -126,13 +132,16 @@ export function maskCamoState(state: CamoState, viewer: Color | null): CamoPubli
     ply: state.ply,
     check: !!viewer && !over && inCheck(state.board, viewer),
     legal,
+    guessColor: viewer && state.phase === "guess" && state.guessingBishop
+      ? state.guessingBishop.color === "w" ? "light" : "dark"
+      : null,
   };
 }
 
 export function applyCamoAction(state: CamoState, action: CamoAction, actor: Color): CamoOutcome {
   if (state.phase === "over") return { ok: false, error: "This game is already over." };
   if (actor !== state.turn) return { ok: false, error: "It isn't your turn." };
-  state = { ...state, revealed: state.revealed ?? [], lost: state.lost ?? emptyLost() };
+  state = { ...state, revealed: state.revealed ?? [], lost: state.lost ?? emptyLost(), guessingBishop: state.guessingBishop ?? null };
 
   for (const sq of action.kind === "move" ? [action.from, action.to] : [action.sq]) {
     if (
@@ -149,33 +158,51 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
 
   if (action.kind === "guess") {
     if (state.phase !== "guess") return { ok: false, error: "There's nothing to scout right now." };
-    if (!canScout(action.sq, actor, state.revealed)) {
-      return { ok: false, error: "Pick one of your opponent's shrouded squares." };
+    const bishop = state.guessingBishop;
+    if (!bishop || isLight(action.sq) !== (bishop.color === "w")) {
+      return { ok: false, error: `Pick a ${bishop?.color === "w" ? "light" : "dark"} square.` };
     }
     const target = state.board[action.sq.r]?.[action.sq.c];
-    const hit = !!target && target.color !== actor;
+    const hit = !!target && target.id === bishop.id;
     let log = tell(
       state,
       actor,
       hit
-        ? `🔦 You unhid ${sqName(action.sq)} — an enemy ${PIECE_NAME[target!.type]} was standing there!`
-        : `🔦 You unhid ${sqName(action.sq)} — empty for now, but you'll see it from here on.`,
+        ? `🔦 Correct! You found the camouflaged bishop on ${sqName(action.sq)}. It is revealed for the rest of the game.`
+        : `🔦 Not quite — the camouflaged bishop was not on ${sqName(action.sq)}.`,
     );
     log = {
       ...log,
       [other(actor)]: say(
         log[other(actor)],
-        `🔦 ${NAME[actor]} unhid ${sqName(action.sq)} — that square has lost its camouflage.`,
+        hit
+          ? `🔦 ${NAME[actor]} correctly found your camouflaged bishop. It is revealed for the rest of the game.`
+          : `🔦 ${NAME[actor]} guessed ${sqName(action.sq)}, but missed your camouflaged bishop.`,
       ),
     };
+    const nextBoard = hit
+      ? state.board.map((row) => row.map((p) => (p?.id === bishop.id ? { ...p, revealed: true } : p)))
+      : state.board;
+    const checked = inCheck(nextBoard, actor);
+    const noMoves = !hasAnyMove(nextBoard, actor, state.epTarget);
+    if (noMoves) {
+      log = {
+        w: say(log.w, checked ? `🏆 ${NAME[other(actor)]} wins by checkmate!` : "🤝 Stalemate — draw."),
+        b: say(log.b, checked ? `🏆 ${NAME[other(actor)]} wins by checkmate!` : "🤝 Stalemate — draw."),
+      };
+    } else if (checked) {
+      log = tell({ ...state, log }, actor, "⚔️ You are in CHECK — you must get out of check.");
+    }
     return {
       ok: true,
       state: {
         ...state,
-        revealed: [...state.revealed, skey(action.sq)],
+        board: nextBoard,
         guesses: { ...state.guesses, [actor]: [...state.guesses[actor], { sq: action.sq, hit }] },
-        phase: "move",
-        turn: other(actor),
+        guessingBishop: null,
+        phase: noMoves ? "over" : "move",
+        turn: actor,
+        winner: noMoves && checked ? other(actor) : null,
         log,
       },
     };
@@ -225,28 +252,19 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
       }
     : state.lost;
 
-  if (result.kingTaken) {
+  const bishopMoved = isCamoBishop(mover) && !mover.revealed;
+  const checked = inCheck(result.board, foe);
+  const noMoves = !bishopMoved && !hasAnyMove(result.board, foe, result.epTarget);
+  if (noMoves) {
     log = {
-      w: say(log.w, `🏆 ${NAME[actor]} captured the king and wins!`),
-      b: say(log.b, `🏆 ${NAME[actor]} captured the king and wins!`),
+      w: say(log.w, checked ? `🏆 ${NAME[actor]} wins by checkmate!` : "🤝 Stalemate — draw."),
+      b: say(log.b, checked ? `🏆 ${NAME[actor]} wins by checkmate!` : "🤝 Stalemate — draw."),
     };
-    return {
-      ok: true,
-      state: {
-        ...state,
-        board: result.board,
-        lastMove: { from, to },
-        epTarget: result.epTarget,
-        phase: "over",
-        winner: actor,
-        lost,
-        ply: state.ply + 1,
-        log,
-      },
-    };
+  } else if (bishopMoved) {
+    log = tell({ ...state, log }, foe, `🌫️ Your opponent moved their camouflaged bishop. Guess which ${mover.color === "w" ? "light" : "dark"} square it is on to reveal it.`);
+  } else if (checked) {
+    log = tell({ ...state, log }, foe, "⚔️ You are in CHECK — you must get out of check.");
   }
-
-  const stillShrouded = state.revealed.length < 32;
   return {
     ok: true,
     state: {
@@ -254,9 +272,11 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
       board: result.board,
       lastMove: { from, to },
       epTarget: result.epTarget,
-      phase: stillShrouded ? "guess" : "move",
-      turn: stillShrouded ? actor : foe,
+      phase: noMoves ? "over" : bishopMoved ? "guess" : "move",
+      turn: foe,
+      guessingBishop: bishopMoved ? { id: mover.id, color: mover.color } : null,
       lost,
+      winner: noMoves && checked ? actor : null,
       ply: state.ply + 1,
       log,
     },
