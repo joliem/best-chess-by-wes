@@ -16,6 +16,7 @@ import {
 
 export const SWITCH_CHANCE = 0.1;
 export const COLOR_NAME: Record<Color, string> = { w: "White", b: "Black" };
+const SWITCHEROO_INTRO = "Every move has a 1-in-10 chance of a switcheroo. Watch out!";
 
 export type SwitcherooState = {
   board: Board;
@@ -72,7 +73,7 @@ export function createInitialState(random: () => number = Math.random): Switcher
     check: null,
     phase: "move",
     winner: null,
-    log: ["Every move has a 1-in-10 chance of a switcheroo. Watch out!"],
+    log: [SWITCHEROO_INTRO],
     spunAtPly: null,
   };
   return rollSwitcheroo(base, random);
@@ -128,12 +129,10 @@ export function applySwitcherooMove(
     ? ` and captured a ${PIECE_NAME[result.captured.type]}${result.enPassant ? " en passant" : ""}`
     : "";
   let log = say(
-    state.log,
+    state.ply === 0 ? state.log.filter((line) => line !== SWITCHEROO_INTRO) : state.log,
     result.castled
-      ? `${COLOR_NAME[state.controller]} castled ${result.castled}side with ${COLOR_NAME[piece.color]}.`
-      : `${COLOR_NAME[state.controller]} moved ${COLOR_NAME[piece.color]}'s ${
-          PIECE_NAME[piece.type]
-        } to ${sqName(to)}${capture}${result.promoted ? ` — promoted to ${PIECE_NAME[promoteTo]}!` : ""}.`,
+      ? `${COLOR_NAME[state.controller]} castled ${result.castled}side.`
+      : `${COLOR_NAME[state.controller]} played ${PIECE_NAME[piece.type]} to ${sqName(to)}${capture}${result.promoted ? ` — promoted to ${PIECE_NAME[promoteTo]}!` : ""}.`,
   );
 
   const nextSwap = state.swapLeft > 0 ? state.swapLeft - 1 : 0;

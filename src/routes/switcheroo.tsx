@@ -50,6 +50,7 @@ export const Route = createFileRoute("/switcheroo")({
 const NAME: Record<Color, string> = { w: "White", b: "Black" };
 const PROMOTIONS: PieceType[] = ["q", "r", "b", "n"];
 const SWITCH_CHANCE = 0.1;
+const SWITCHEROO_INTRO = "Every move has a 1-in-10 chance of a switcheroo. Watch out!";
 
 function SwitcherooChess() {
   const [board, setBoard] = useState<Board>(() => initialBoard());
@@ -68,13 +69,17 @@ function SwitcherooChess() {
   const [check, setCheck] = useState<Color | null>(null);
   const lost = useMemo(() => lostFromBoard(board), [board]);
   useCaptureToast(lost);
-  const [log, setLog] = useState<string[]>([
-    "Every move has a 1-in-10 chance of a switcheroo. Watch out!",
-  ]);
+  const [log, setLog] = useState<string[]>([SWITCHEROO_INTRO]);
   const rolled = useRef(-1);
 
   const mover: Color = swapLeft > 0 ? other(controller) : controller;
-  const say = (line: string) => setLog((l) => [line, ...l].slice(0, 7));
+  const say = (line: string, removeIntro = false) =>
+    setLog((current) =>
+      [
+        line,
+        ...(removeIntro ? current.filter((item) => item !== SWITCHEROO_INTRO) : current),
+      ].slice(0, 7),
+    );
 
   // Roll for a switcheroo at the start of each normal turn (client-only randomness).
   useEffect(() => {
@@ -111,7 +116,7 @@ function SwitcherooChess() {
     setPhase("move");
     setWinner(null);
     setCheck(null);
-    setLog(["Fresh board. Every move has a 1-in-10 chance of a switcheroo."]);
+    setLog([SWITCHEROO_INTRO]);
   }
 
   function endTurn(nextBoard: Board, nextEp: Sq | null) {
@@ -154,10 +159,11 @@ function SwitcherooChess() {
       : "";
     say(
       result.castled
-        ? `${NAME[controller]} castled ${result.castled}side with ${NAME[piece.color]}.`
-        : `${NAME[controller]} moved ${NAME[piece.color]}'s ${PIECE_NAME[piece.type]} to ${sqName(to)}${capture}${
+        ? `${NAME[controller]} castled ${result.castled}side.`
+        : `${NAME[controller]} played ${PIECE_NAME[piece.type]} to ${sqName(to)}${capture}${
             result.promoted ? ` — promoted to ${PIECE_NAME[promoteTo]}!` : ""
           }.`,
+      ply === 0,
     );
     endTurn(result.board, result.epTarget);
   }
@@ -242,7 +248,6 @@ function SwitcherooChess() {
                 : " — it's pinned to its own king."}
             </p>
           )}
-
         </div>
 
         <aside className="flex flex-col gap-4">

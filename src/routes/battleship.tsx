@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { BrandMark } from "@/components/Brand";
 import { CapturedBar } from "@/components/chess/CapturedBar";
-import { ChessBoard } from "@/components/chess/ChessBoard";
+import { ChessBoard, MissMarkerIcon } from "@/components/chess/ChessBoard";
 import { Button } from "@/components/ui/button";
 import { useCaptureToast } from "@/hooks/useCaptureToast";
 import { applyCamoAction, createCamoState, maskCamoState, NAME } from "@/lib/camo-engine";
@@ -32,15 +32,20 @@ export const Route = createFileRoute("/battleship")({
   component: BattleshipBishop,
 });
 const PROMOTIONS: PieceType[] = ["q", "r", "b", "n"];
+type Selection = { sq: Sq; hidden: boolean };
 
 function BattleshipBishop() {
   const [state, setState] = useState(createCamoState);
-  const [selected, setSelected] = useState<Sq | null>(null);
+  const [selected, setSelected] = useState<Selection | null>(null);
   const [pending, setPending] = useState<{ from: Sq; to: Sq } | null>(null);
   const [handoff, setHandoff] = useState(false);
   const seenNotice = useRef<number | null>(null);
   const publicState = useMemo(() => maskCamoState(state, state.turn), [state]);
-  const moves = selected ? (publicState.legal[key(selected)] ?? []) : [];
+  const moves = selected
+    ? selected.hidden
+      ? publicState.hiddenLegal
+      : (publicState.legal[key(selected.sq)] ?? [])
+    : [];
   useCaptureToast(publicState.lost);
   useEffect(() => {
     if (handoff || !publicState.notice || seenNotice.current === publicState.notice.id) return;
@@ -57,10 +62,16 @@ function BattleshipBishop() {
     setHandoff(false);
     seenNotice.current = null;
   }
-  function move(from: Sq, to: Sq, promoteTo?: PieceType) {
+  function move(from: Sq, to: Sq, hidden = false, promoteTo?: PieceType) {
     const outcome = applyCamoAction(
       state,
-      { kind: "move", from, to, ...(promoteTo ? { promoteTo } : {}) },
+      {
+        kind: "move",
+        from,
+        to,
+        ...(hidden ? { hidden: true } : {}),
+        ...(promoteTo ? { promoteTo } : {}),
+      },
       state.turn,
     );
     if (!outcome.ok) return;
@@ -78,17 +89,26 @@ function BattleshipBishop() {
       return;
     }
     if (selected && moves.some((candidate) => same(candidate, sq))) {
-      const moving =
-        publicState.overlays[key(selected)] ?? publicState.board[selected.r]?.[selected.c];
+      const moving = selected.hidden
+        ? publicState.overlays[key(selected.sq)]
+        : publicState.board[selected.sq.r]?.[selected.sq.c];
       if (moving?.type === "p" && (sq.r === 0 || sq.r === 7)) {
-        setPending({ from: selected, to: sq });
+        setPending({ from: selected.sq, to: sq });
         return;
       }
-      move(selected, sq);
+      move(selected.sq, sq, selected.hidden);
       return;
     }
-    const piece = publicState.overlays[key(sq)] ?? publicState.board[sq.r]?.[sq.c];
-    if (piece?.color === state.turn) setSelected(selected && same(selected, sq) ? null : sq);
+    const overlay = publicState.overlays[key(sq)];
+    const piece = publicState.board[sq.r]?.[sq.c];
+    if (overlay?.color === state.turn && piece?.color === state.turn) {
+      setSelected(
+        selected && same(selected.sq, sq)
+          ? { sq, hidden: !selected.hidden }
+          : { sq, hidden: false },
+      );
+    } else if (overlay?.color === state.turn) setSelected({ sq, hidden: true });
+    else if (piece?.color === state.turn) setSelected({ sq, hidden: false });
   }
   const mode = state.phase === "guess" ? "guess" : state.phase === "move" ? "move" : "locked";
   return (
@@ -98,7 +118,7 @@ function BattleshipBishop() {
         <p className="text-sm uppercase tracking-[0.35em] text-torch">Wesley&apos;s</p>
         <h1 className="text-4xl text-foreground sm:text-5xl">Battleship Bishop</h1>
         <p className="mt-2 text-muted-foreground">
-          Hunt an enemy bishop that can hide beneath your pieces.
+          Beware of an enemy bishop hidden under squares of the same color.
         </p>
         <Link to="/" className="mt-1 inline-block text-xs text-torch underline">
           ← All variants
@@ -116,7 +136,7 @@ function BattleshipBishop() {
               {state.phase === "over"
                 ? "Game over"
                 : state.phase === "guess"
-                  ? `${NAME[state.turn]}: target one ${publicState.guessColor} square`
+                  ? `${NAME[state.turn]} to target one ${publicState.guessColor} square`
                   : `${NAME[state.turn]} to move`}
             </span>
           </div>
@@ -126,11 +146,13 @@ function BattleshipBishop() {
             viewer={state.turn}
             revealed={[]}
             showAll={state.phase === "over"}
-            selected={selected}
+            selected={selected?.sq ?? null}
             moves={moves}
             lastMove={publicState.lastMove}
             guesses={publicState.guesses}
-            checkSq={publicState.check ? findKing(publicState.board, state.turn) : null}
+            checkSq={
+              publicState.checkColor ? findKing(publicState.board, publicState.checkColor) : null
+            }
             mode={mode}
             onSquare={onSquare}
           />
@@ -143,21 +165,24 @@ function BattleshipBishop() {
               <li>
                 🫥 Each player&apos;s kingside bishop is camouflaged on squares of its same color —
                 White&apos;s is hidden on light squares; Black&apos;s is hidden on dark squares. The
-                hidden bishop can&apos;t be captured in the regular way, and an opponent piece can
-                even land on its square without realizing it!
+                hidden bishop can&apos;t be captured in the regular way, and another piece can even
+                land on the square where it&apos;s hiding.
               </li>
               <li>
                 🎯 If the hidden bishop moves without making a capture, the other player gets to
-                guess its location. If they guess correctly, they capture the bishop! Every guess
-                leaves a red target on the board.
+                guess its location, battleship-style! If they guess correctly, they capture the
+                bishop.
+              </li>
+              <li className="flex gap-2">
+                <MissMarkerIcon className="mt-0.5" />
+                <span>
+                  A hidden bishop can&apos;t move onto an occupied square unless it&apos;s capturing
+                  an opponent piece, but then it reveals itself for the rest of the game.
+                </span>
               </li>
               <li>
-                ⚔️ A hidden bishop can&apos;t move onto an occupied square unless it&apos;s
-                capturing an opponent piece, but then it reveals itself for the rest of the game.
-              </li>
-              <li>
-                💡 The hidden bishop can give check, but beware that it might give away its
-                location!
+                ✓ The hidden bishop can give check, but only on a move by itself or one of its own
+                army pieces.
               </li>
             </ul>
           </div>
@@ -185,7 +210,7 @@ function BattleshipBishop() {
                 <Button
                   key={type}
                   variant="outline"
-                  onClick={() => move(pending.from, pending.to, type)}
+                  onClick={() => move(pending.from, pending.to, false, type)}
                 >
                   {GLYPH[state.turn][type]}
                 </Button>

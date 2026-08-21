@@ -14,6 +14,29 @@ import { cn } from "@/lib/utils";
 
 export type GuessMark = { sq: Sq; hit: boolean };
 
+export function MissMarkerIcon({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-grid size-4 shrink-0 place-items-center rounded-full border-2 border-destructive text-xs font-black leading-none text-destructive",
+        className,
+      )}
+      aria-hidden="true"
+    >
+      ×
+    </span>
+  );
+}
+
+export function CheckHaze() {
+  return (
+    <span
+      className="pointer-events-none absolute inset-[8%] z-20 rounded-full bg-destructive/30 shadow-[0_0_14px_5px_hsl(var(--destructive)/0.35)]"
+      aria-hidden="true"
+    />
+  );
+}
+
 type Props = {
   board: BoardType;
   /** hidden pieces visible only to this viewer, keyed by square */
@@ -90,7 +113,6 @@ export function ChessBoard({
 
                   clickable ? "cursor-pointer hover:brightness-125" : "cursor-default",
                   isSelected && "ring-4 ring-inset ring-torch",
-                  checkSq && same(checkSq, sq) && "animate-check-pulse",
                 )}
               >
                 <span className="pointer-events-none absolute left-1 top-0.5 text-[8px] font-semibold text-piece-dark/45">
@@ -108,12 +130,7 @@ export function ChessBoard({
                 )}
 
                 {guess && (
-                  <span
-                    className="pointer-events-none absolute inset-0 z-30 grid place-items-center text-[58cqmin] font-black leading-none text-destructive [text-shadow:0_1px_2px_oklch(0_0_0/0.75)]"
-                    title={guess.hit ? "Hidden bishop captured here" : "Missed target"}
-                  >
-                    ◎
-                  </span>
+                  <MissMarkerIcon className="pointer-events-none absolute right-1 top-1 z-30 size-[24cqmin] text-[20cqmin]" />
                 )}
 
                 {visibleLastMove &&
@@ -125,7 +142,7 @@ export function ChessBoard({
                   <span
                     className={cn(
                       "pointer-events-none absolute inset-0 grid place-items-center leading-none",
-                      overlay && "translate-x-[16%] scale-75",
+                      overlay && shown && "translate-x-[16%] scale-75",
                       shown.type === "p" ? "text-[62cqmin]" : "text-[78cqmin]",
                       shown.color === "w"
                         ? "text-piece-light [text-shadow:0_0_1px_oklch(0.2_0.03_250),0_1px_2px_oklch(0_0_0/0.55),0_0_3px_oklch(0.2_0.03_250)]"
@@ -139,7 +156,8 @@ export function ChessBoard({
                 {overlay && (
                   <span
                     className={cn(
-                      "pointer-events-none absolute inset-0 grid -translate-x-[16%] scale-75 place-items-center text-[78cqmin] leading-none",
+                      "pointer-events-none absolute inset-0 grid place-items-center text-[78cqmin] leading-none",
+                      shown && "-translate-x-[16%] scale-75",
                       overlay.color === "w"
                         ? "text-piece-light [text-shadow:0_0_1px_oklch(0.2_0.03_250),0_1px_2px_oklch(0_0_0/0.55)]"
                         : "text-piece-dark [text-shadow:0_0_1px_oklch(1_0_0/0.85),0_1px_2px_oklch(1_0_0/0.5)]",
@@ -149,6 +167,8 @@ export function ChessBoard({
                     {GLYPH[overlay.color][overlay.type]}
                   </span>
                 )}
+
+                {checkSq && same(checkSq, sq) && <CheckHaze />}
 
                 {isMove && (
                   <span className="pointer-events-none absolute inset-0 grid place-items-center">

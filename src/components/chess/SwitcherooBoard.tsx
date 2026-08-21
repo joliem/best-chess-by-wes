@@ -9,6 +9,7 @@ import {
   type Sq,
 } from "@/lib/chess";
 import { cn } from "@/lib/utils";
+import { CheckHaze } from "@/components/chess/ChessBoard";
 
 type Props = {
   board: BoardType;
@@ -87,7 +88,6 @@ export function SwitcherooBoard({
                       : "bg-stone-light",
                   clickable ? "cursor-pointer hover:brightness-125" : "cursor-default",
                   isSelected && "ring-4 ring-inset ring-torch",
-                  checkSq && same(checkSq, sq) && "animate-check-pulse",
                 )}
               >
                 <span className="pointer-events-none absolute left-1 top-0.5 text-[8px] font-semibold text-piece-dark/45">
@@ -112,6 +112,7 @@ export function SwitcherooBoard({
                     {GLYPH[piece.color][piece.type]}
                   </span>
                 )}
+                {checkSq && same(checkSq, sq) && <CheckHaze />}
 
                 {isMove && (
                   <span className="pointer-events-none absolute inset-0 grid place-items-center">

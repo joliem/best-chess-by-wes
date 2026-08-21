@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { ChessBoard } from "@/components/chess/ChessBoard";
+import { ChessBoard, MissMarkerIcon } from "@/components/chess/ChessBoard";
 import { BattleLog } from "@/components/online/OnlineSwitcheroo";
 import { GameOver, PromotionPicker } from "@/components/online/shell";
 import { findKing, GLYPH, key, same, type Color, type PieceType, type Sq } from "@/lib/chess";
@@ -11,13 +11,14 @@ import { emptyLost } from "@/lib/captures";
 import { NAME, type CamoPublicState } from "@/lib/camo-engine";
 import type { OnlineProps } from "@/components/online/types";
 import { cn } from "@/lib/utils";
+type Selection = { sq: Sq; hidden: boolean };
 
 export function OnlineBattleship({ game, seat, sending, error, act, rematch }: OnlineProps) {
   const state = game.state as CamoPublicState;
   const viewer: Color = seat ?? "w";
   const myTurn = Boolean(seat && state.turn === seat && state.phase !== "over");
 
-  const [selected, setSelected] = useState<Sq | null>(null);
+  const [selected, setSelected] = useState<Selection | null>(null);
   const [pending, setPending] = useState<{ from: Sq; to: Sq } | null>(null);
   const seenNotice = useRef<number | null>(null);
 
@@ -35,17 +36,23 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
 
   const moves = useMemo(() => {
     if (!selected || mode !== "move") return [];
-    return state.legal?.[key(selected)] ?? [];
+    return selected.hidden ? state.hiddenLegal : (state.legal?.[key(selected.sq)] ?? []);
   }, [state, selected, mode]);
 
   const lost = state.lost ?? emptyLost();
   useCaptureToast(lost, seat ?? null);
-  const checkSq = state.check ? findKing(state.board, viewer) : null;
+  const checkSq = state.checkColor ? findKing(state.board, state.checkColor) : null;
 
-  async function move(from: Sq, to: Sq, promoteTo?: PieceType) {
+  async function move(from: Sq, to: Sq, hidden = false, promoteTo?: PieceType) {
     setSelected(null);
     setPending(null);
-    await act({ kind: "move", from, to, ...(promoteTo ? { promoteTo } : {}) });
+    await act({
+      kind: "move",
+      from,
+      to,
+      ...(hidden ? { hidden: true } : {}),
+      ...(promoteTo ? { promoteTo } : {}),
+    });
   }
 
   function onSquare(sq: Sq) {
@@ -57,19 +64,27 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
       return;
     }
 
-    const piece = state.overlays[key(sq)] ?? state.board[sq.r]?.[sq.c];
     if (selected && moves.some((m) => same(m, sq))) {
-      const moving = state.overlays[key(selected)] ?? state.board[selected.r]?.[selected.c];
+      const moving = selected.hidden
+        ? state.overlays[key(selected.sq)]
+        : state.board[selected.sq.r]?.[selected.sq.c];
       if (moving?.type === "p" && (sq.r === 0 || sq.r === 7)) {
-        setPending({ from: selected, to: sq });
+        setPending({ from: selected.sq, to: sq });
         return;
       }
-      void move(selected, sq);
+      void move(selected.sq, sq, selected.hidden);
       return;
     }
-    if (piece && piece.color === state.turn) {
-      setSelected(selected && same(selected, sq) ? null : sq);
-    }
+    const overlay = state.overlays[key(sq)];
+    const piece = state.board[sq.r]?.[sq.c];
+    if (overlay?.color === state.turn && piece?.color === state.turn)
+      setSelected(
+        selected && same(selected.sq, sq)
+          ? { sq, hidden: !selected.hidden }
+          : { sq, hidden: false },
+      );
+    else if (overlay?.color === state.turn) setSelected({ sq, hidden: true });
+    else if (piece?.color === state.turn) setSelected({ sq, hidden: false });
   }
 
   return (
@@ -85,7 +100,7 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
             {state.phase === "over"
               ? "Game over"
               : state.phase === "guess"
-                ? `${NAME[state.turn]}: guess the camouflaged bishop's ${state.guessColor} square`
+                ? `${NAME[state.turn]} to target one ${state.guessColor} square`
                 : `${NAME[state.turn]} to move`}
           </span>
           <span className="text-sm text-muted-foreground">
@@ -99,7 +114,7 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
           viewer={viewer}
           revealed={state.revealed}
           showAll={state.phase === "over"}
-          selected={selected}
+          selected={selected?.sq ?? null}
           moves={moves}
           lastMove={state.lastMove}
           guesses={state.guesses}
@@ -120,21 +135,23 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
             <li>
               🫥 Each player&apos;s kingside bishop is camouflaged on squares of its same color —
               White&apos;s is hidden on light squares; Black&apos;s is hidden on dark squares. It
-              can&apos;t be captured normally, and an opponent piece can even land on its square
-              without realizing it!
+              hidden bishop can&apos;t be captured in the regular way, and another piece can even
+              land on the square where it&apos;s hiding.
             </li>
             <li>
               🎯 If the hidden bishop moves without making a capture, the other player gets to guess
-              its location. A correct guess captures the bishop; every guess leaves a red target on
-              the board.
+              its location, battleship-style! If they guess correctly, they capture the bishop.
+            </li>
+            <li className="flex gap-2">
+              <MissMarkerIcon className="mt-0.5" />
+              <span>
+                A hidden bishop can&apos;t move onto an occupied square unless it captures an enemy
+                piece. A capture reveals it for the rest of the game, so there is no location guess.
+              </span>
             </li>
             <li>
-              ⚔️ A hidden bishop can&apos;t move onto an occupied square unless it captures an enemy
-              piece. A capture reveals it for the rest of the game, so there is no location guess.
-            </li>
-            <li>
-              💡 The hidden bishop can give check, but beware that doing so might give away its
-              location!
+              ✓ The hidden bishop can give check, but only on a move by itself or one of its own
+              army pieces.
             </li>
           </ul>
         </div>
@@ -146,7 +163,7 @@ export function OnlineBattleship({ game, seat, sending, error, act, rematch }: O
         <PromotionPicker
           color={state.turn}
           glyph={GLYPH}
-          onPick={(t) => void move(pending.from, pending.to, t)}
+          onPick={(t) => void move(pending.from, pending.to, false, t)}
         />
       )}
 

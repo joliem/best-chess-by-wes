@@ -70,6 +70,9 @@ function say(log: string[], line: string): string[] {
   return [line, ...log].slice(0, 8);
 }
 
+const TREASURE_INTRO =
+  "Six coins are buried somewhere in the middle four ranks. Land on them and plunder!";
+
 export function createTreasureState(): TreasureState {
   return {
     board: initialBoard(),
@@ -88,7 +91,7 @@ export function createTreasureState(): TreasureState {
     drawByTreasure: false,
     reveal: null,
     ply: 0,
-    log: ["Six coins are buried somewhere in the middle four ranks. Nobody knows where!"],
+    log: [TREASURE_INTRO],
   };
 }
 
@@ -294,7 +297,7 @@ export function applyTreasureAction(
     ? ` and captured a ${PIECE_NAME[result.captured.type]}${result.enPassant ? " en passant" : ""}`
     : "";
   let log = say(
-    state.log,
+    state.ply === 0 ? state.log.filter((line) => line !== TREASURE_INTRO) : state.log,
     result.castled
       ? `${NAME[actor]} castled ${result.castled}side.`
       : `${NAME[actor]} played ${PIECE_NAME[mover.type]} to ${sqName(to)}${capture}${

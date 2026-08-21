@@ -85,7 +85,7 @@ const PROMOTIONS = ["q", "r", "b", "n"] as const;
 
 /** The union of every action a client may send, per variant. */
 export type OnlineAction =
-  | { kind: "move"; from: Sq; to: Sq; promoteTo?: PieceType }
+  | { kind: "move"; from: Sq; to: Sq; hidden?: boolean; promoteTo?: PieceType }
   | { kind: "guess"; sq: Sq }
   | { kind: "spend"; coin: "gold" | "silver" }
   | { kind: "pick"; sq: Sq }
@@ -95,7 +95,7 @@ function cleanAction(input: unknown): OnlineAction {
   const a = input as Partial<OnlineAction> & { kind?: string };
   switch (a?.kind) {
     case "move": {
-      const move = a as { from: unknown; to: unknown; promoteTo?: unknown };
+      const move = a as { from: unknown; to: unknown; hidden?: unknown; promoteTo?: unknown };
       const promoteTo = PROMOTIONS.includes(move.promoteTo as never)
         ? (move.promoteTo as PieceType)
         : undefined;
@@ -103,6 +103,7 @@ function cleanAction(input: unknown): OnlineAction {
         kind: "move",
         from: cleanSq(move.from),
         to: cleanSq(move.to),
+        ...(move.hidden === true ? { hidden: true } : {}),
         ...(promoteTo ? { promoteTo } : {}),
       };
     }

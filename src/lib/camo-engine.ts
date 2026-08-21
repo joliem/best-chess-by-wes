@@ -1,5 +1,6 @@
 import {
   applyMove,
+  findKing,
   isLight,
   key,
   other,
@@ -17,13 +18,14 @@ import {
   battleshipInCheck,
   battleshipPieceMoves,
   createBattleshipBoard,
+  hiddenBishopAttacks,
   hiddenBishopMoves,
   type HiddenBishops,
 } from "@/lib/battleship-bishop";
 import { emptyLost, sortLost, type Lost } from "@/lib/captures";
 
 export const NAME: Record<Color, string> = { w: "White", b: "Black" };
-export type GuessRecord = { sq: Sq; hit: boolean };
+export type GuessRecord = { sq: Sq; hit: boolean; actor: Color };
 export type Notice = { id: number; text: string } | null;
 export type CamoState = {
   board: Board;
@@ -31,8 +33,9 @@ export type CamoState = {
   turn: Color;
   phase: "move" | "guess" | "over";
   guessingColor: Color | null;
+  hiddenCheck: Color | null;
   epTarget: Sq | null;
-  lastMove: { from: Sq; to: Sq; hidden: boolean } | null;
+  lastMove: { from: Sq; to: Sq; hidden: boolean; color: Color } | null;
   guesses: GuessRecord[];
   lost: Lost;
   winner: Color | null;
@@ -50,15 +53,19 @@ export type CamoPublicState = Omit<
   log: string[];
   notice: Notice;
   check: boolean;
+  checkColor: Color | null;
   legal: Record<string, Sq[]>;
+  hiddenLegal: Sq[];
   guessColor: "light" | "dark" | null;
   revealed: string[];
 };
 export type CamoAction =
-  { kind: "move"; from: Sq; to: Sq; promoteTo?: PieceType } | { kind: "guess"; sq: Sq };
+  | { kind: "move"; from: Sq; to: Sq; hidden?: boolean; promoteTo?: PieceType }
+  | { kind: "guess"; sq: Sq };
 export type CamoOutcome = { ok: true; state: CamoState } | { ok: false; error: string };
 
 const say = (log: string[], line: string) => [line, ...log].slice(0, 8);
+const BATTLESHIP_INTRO = "Hunt the hidden bishop before it attacks!";
 function addLost(lost: Lost, piece: Piece): Lost {
   return { ...lost, [piece.color]: sortLost([...lost[piece.color], piece.type]) };
 }
@@ -68,9 +75,10 @@ function finishTurn(
   hidden: HiddenBishops,
   next: Color,
   log: Record<Color, string[]>,
+  hiddenCheck: Color | null,
 ) {
-  const checked = battleshipInCheck(board, hidden, next);
-  const noMoves = !battleshipHasAnyMove(board, hidden, next, state.epTarget);
+  const checked = battleshipInCheck(board, hidden, next, hiddenCheck);
+  const noMoves = !battleshipHasAnyMove(board, hidden, next, state.epTarget, hiddenCheck);
   if (!noMoves) return { phase: "move" as const, winner: null, log };
   const winner = checked ? other(next) : null;
   const line = checked ? `🏆 ${NAME[winner!]} wins by checkmate!` : "🤝 Stalemate — draw.";
@@ -78,13 +86,14 @@ function finishTurn(
 }
 export function createCamoState(): CamoState {
   const { board, hidden } = createBattleshipBoard();
-  const opening = "White moves first. Hunt the hidden bishops!";
+  const opening = BATTLESHIP_INTRO;
   return {
     board,
     hidden,
     turn: "w",
     phase: "move",
     guessingColor: null,
+    hiddenCheck: null,
     epTarget: null,
     lastMove: null,
     guesses: [],
@@ -105,6 +114,7 @@ export function maskCamoState(state: CamoState, viewer: Color | null): CamoPubli
     if (bishop && (over || color === viewer)) overlays[key(bishop.sq)] = bishop.piece;
   }
   const legal: Record<string, Sq[]> = {};
+  let hiddenLegal: Sq[] = [];
   if (viewer && !over && state.phase === "move" && state.turn === viewer) {
     for (let r = 0; r < 8; r++)
       for (let c = 0; c < 8; c++) {
@@ -114,13 +124,20 @@ export function maskCamoState(state: CamoState, viewer: Color | null): CamoPubli
             state.hidden,
             { r, c },
             state.epTarget,
+            state.hiddenCheck,
           );
       }
     const bishop = state.hidden[viewer];
-    if (bishop) legal[key(bishop.sq)] = hiddenBishopMoves(state.board, state.hidden, viewer);
+    hiddenLegal = bishop
+      ? hiddenBishopMoves(state.board, state.hidden, viewer, state.hiddenCheck)
+      : [];
   }
-  const ownHiddenMove =
-    state.lastMove?.hidden && state.hidden[viewer ?? "w"]?.piece.color === viewer;
+  const ownHiddenMove = state.lastMove?.hidden && state.lastMove.color === viewer;
+  const checkColor =
+    state.phase !== "over" &&
+    battleshipInCheck(state.board, state.hidden, state.turn, state.hiddenCheck)
+      ? state.turn
+      : null;
   return {
     board: state.board,
     overlays,
@@ -129,15 +146,20 @@ export function maskCamoState(state: CamoState, viewer: Color | null): CamoPubli
     epTarget: state.epTarget,
     lastMove:
       state.lastMove && (!state.lastMove.hidden || over || ownHiddenMove) ? state.lastMove : null,
-    guesses: state.guesses,
+    guesses: viewer
+      ? state.guesses.filter((guess) => guess.actor === viewer && !guess.hit).slice(-1)
+      : [],
     lost: state.lost,
     winner: state.winner,
     log: viewer ? state.log[viewer] : [],
     notice: viewer ? state.notice[viewer] : null,
     eventId: state.eventId,
     ply: state.ply,
-    check: !!viewer && !over && battleshipInCheck(state.board, state.hidden, viewer),
+    check:
+      !!viewer && !over && battleshipInCheck(state.board, state.hidden, viewer, state.hiddenCheck),
+    checkColor,
     legal,
+    hiddenLegal,
     guessColor:
       viewer && state.phase === "guess" && state.guessingColor
         ? state.guessingColor === "w"
@@ -184,14 +206,16 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
       [actor]: say(state.log[actor], `🎯 ${actorText}`),
       [foe]: say(state.log[foe], `🎯 ${foeText}`),
     };
-    const end = finishTurn(state, state.board, hidden, actor, log);
+    const hiddenCheck = hit && state.hiddenCheck === foe ? null : state.hiddenCheck;
+    const end = finishTurn(state, state.board, hidden, actor, log, hiddenCheck);
     log = end.log;
     return {
       ok: true,
       state: {
         ...state,
         hidden,
-        guesses: [...state.guesses, { sq: action.sq, hit }],
+        hiddenCheck,
+        guesses: [...state.guesses, { sq: action.sq, hit, actor }],
         guessingColor: null,
         phase: end.phase,
         winner: end.winner,
@@ -208,13 +232,21 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
   }
   if (state.phase !== "move") return { ok: false, error: "You can't move right now." };
   const ownHidden = state.hidden[actor],
-    movingHidden = !!ownHidden && same(ownHidden.sq, action.from);
+    movingHidden = action.hidden === true;
+  if (movingHidden && (!ownHidden || !same(ownHidden.sq, action.from)))
+    return { ok: false, error: "There's no hidden bishop on that square." };
   const mover = movingHidden ? ownHidden.piece : state.board[action.from.r]?.[action.from.c];
   if (!mover) return { ok: false, error: "There's no piece on that square." };
   if (mover.color !== actor) return { ok: false, error: "That isn't your piece." };
   const legal = movingHidden
-    ? hiddenBishopMoves(state.board, state.hidden, actor)
-    : battleshipPieceMoves(state.board, state.hidden, action.from, state.epTarget);
+    ? hiddenBishopMoves(state.board, state.hidden, actor, state.hiddenCheck)
+    : battleshipPieceMoves(
+        state.board,
+        state.hidden,
+        action.from,
+        state.epTarget,
+        state.hiddenCheck,
+      );
   if (!legal.some((sq) => same(sq, action.to)))
     return { ok: false, error: "That move isn't legal." };
   const foe = other(actor);
@@ -252,17 +284,25 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
   const captureText = captured
     ? ` and captured a ${PIECE_NAME[captured.type]}${enPassant ? " en passant" : ""}`
     : "";
+  const moveLine = castled
+    ? `${NAME[actor]} castled ${castled}side.`
+    : `${NAME[actor]} played ${PIECE_NAME[mover.type]} to ${sqName(action.to)}${captureText}${promoted ? " and promoted!" : ""}.`;
+  const baseLog = {
+    w: state.ply === 0 ? state.log.w.filter((line) => line !== BATTLESHIP_INTRO) : state.log.w,
+    b: state.ply === 0 ? state.log.b.filter((line) => line !== BATTLESHIP_INTRO) : state.log.b,
+  };
   let log: Record<Color, string[]> = {
-    ...state.log,
-    [actor]: say(
-      state.log[actor],
-      castled
-        ? `You castled ${castled}side.`
-        : `You played ${PIECE_NAME[mover.type]} to ${sqName(action.to)}${captureText}${promoted ? " and promoted!" : ""}.`,
+    w: say(
+      baseLog.w,
+      movingHidden && !hiddenCapture && actor !== "w"
+        ? `${NAME[actor]} moved their hidden bishop.`
+        : moveLine,
     ),
-    [foe]: say(
-      state.log[foe],
-      captured ? `⚔️ Your ${PIECE_NAME[captured.type]} was captured!` : "Your opponent moved.",
+    b: say(
+      baseLog.b,
+      movingHidden && !hiddenCapture && actor !== "b"
+        ? `${NAME[actor]} moved their hidden bishop.`
+        : moveLine,
     ),
   };
   const notice: Record<Color, Notice> = { w: null, b: null };
@@ -276,7 +316,11 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
       text: `${NAME[actor]}'s hidden bishop captured your ${PIECE_NAME[captured!.type]} and is now revealed!`,
     };
   }
-  const checked = battleshipInCheck(board, hidden, foe);
+  const hiddenChecker = hidden[actor];
+  const foeKing = findKing(board, foe);
+  const hiddenCheck =
+    hiddenChecker && foeKing && hiddenBishopAttacks(board, hiddenChecker, foeKing) ? actor : null;
+  const checked = battleshipInCheck(board, hidden, foe, hiddenCheck);
   if (checked && movingHidden) {
     notice[foe] = { id: eventId, text: `${NAME[actor]}'s hidden bishop put you in check!` };
     log = { ...log, [foe]: say(log[foe], `⚔️ ${NAME[actor]}'s hidden bishop put you in check!`) };
@@ -292,8 +336,12 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
         `🎯 Target one ${actor === "w" ? "light" : "dark"} square to find the hidden bishop.`,
       ),
     };
+    notice[foe] = {
+      id: eventId,
+      text: `${NAME[actor]} moved their hidden bishop. Target one ${actor === "w" ? "light" : "dark"} square.`,
+    };
   } else {
-    const end = finishTurn({ ...state, epTarget }, board, hidden, foe, log);
+    const end = finishTurn({ ...state, epTarget }, board, hidden, foe, log, hiddenCheck);
     phase = end.phase;
     winner = end.winner;
     log = end.log;
@@ -304,11 +352,12 @@ export function applyCamoAction(state: CamoState, action: CamoAction, actor: Col
       ...state,
       board,
       hidden,
+      hiddenCheck,
       turn: foe,
       phase,
       guessingColor: quietHiddenMove ? actor : null,
       epTarget,
-      lastMove: { from: action.from, to: action.to, hidden: movingHidden },
+      lastMove: { from: action.from, to: action.to, hidden: movingHidden, color: actor },
       lost,
       winner,
       log,

@@ -62,6 +62,8 @@ export const Route = createFileRoute("/treasure")({
 
 const NAME: Record<Color, string> = { w: "White", b: "Black" };
 const PROMOTIONS: PieceType[] = ["q", "r", "b", "n"];
+const TREASURE_INTRO =
+  "Six coins are buried somewhere in the middle four ranks. Land on them and plunder!";
 
 function TreasureChess() {
   const [board, setBoard] = useState<Board>(() => initialBoard());
@@ -84,14 +86,18 @@ function TreasureChess() {
   const lost = useMemo(() => lostFromBoard(board), [board]);
   useCaptureToast(lost);
   const [reveal, setReveal] = useState<CoinReveal | null>(null);
-  const [log, setLog] = useState<string[]>([
-    "Six coins are buried somewhere in the middle four ranks. Land on them and plunder!",
-  ]);
+  const [log, setLog] = useState<string[]>([TREASURE_INTRO]);
 
   // Randomised on the client only, so the server render always matches.
   useEffect(() => setCoins(scatterCoins()), []);
 
-  const say = (line: string) => setLog((l) => [line, ...l].slice(0, 7));
+  const say = (line: string, removeIntro = false) =>
+    setLog((current) =>
+      [line, ...(removeIntro ? current.filter((item) => item !== TREASURE_INTRO) : current)].slice(
+        0,
+        7,
+      ),
+    );
 
   const shieldedIds = shields.map((s) => s.id);
 
@@ -136,7 +142,7 @@ function TreasureChess() {
     setWinner(null);
     setDrawByTreasure(false);
     setCheck(null);
-    setLog(["Fresh board, fresh treasure. White moves first."]);
+    setLog([TREASURE_INTRO]);
   }
 
   /**
@@ -226,6 +232,7 @@ function TreasureChess() {
         : `${NAME[turn]} played ${PIECE_NAME[mover.type]} to ${sqName(to)}${capture}${
             result.promoted && !asQueen ? ` — promoted to ${PIECE_NAME[promoteTo]}!` : ""
           }.`,
+      lastMove === null,
     );
     collect(to);
     if (result.kingTaken) {
@@ -386,7 +393,6 @@ function TreasureChess() {
                 (1 gold coin = 2 silver coins). A stalemate only ends in a draw if treasure
                 stockpiles are equal.
               </li>
-
             </ul>
           </div>
 

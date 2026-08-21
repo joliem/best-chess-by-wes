@@ -31,43 +31,39 @@ export function createBattleshipBoard(): { board: Board; hidden: HiddenBishops }
   };
 }
 
-/** Board used for a player's ordinary moves: their own hidden bishop is solid; the enemy's is not. */
-export function boardForPlayer(board: Board, hidden: HiddenBishops, color: Color): Board {
-  const own = hidden[color];
-  if (!own || board[own.sq.r]![own.sq.c]) return board;
-  const next = board.map((row) => row.slice());
-  next[own.sq.r]![own.sq.c] = own.piece;
-  return next;
-}
-
-/** Legal destinations for an ordinary visible piece. The opponent's hidden bishop is intangible. */
+/** Legal destinations for an ordinary piece. Every hidden bishop is intangible. */
 export function battleshipPieceMoves(
   board: Board,
   hidden: HiddenBishops,
   from: Sq,
   epTarget: Sq | null,
+  activeHiddenCheck: Color | null,
 ): Sq[] {
   const piece = board[from.r]?.[from.c];
   if (!piece) return [];
-  const view = boardForPlayer(board, hidden, piece.color);
-  return safeMoves(view, from, epTarget).filter((to) => {
+  return safeMoves(board, from, epTarget).filter((to) => {
     if (piece.type === "k" && Math.abs(to.c - from.c) === 2) {
       const step = to.c > from.c ? 1 : -1;
       const mid = applyMove(board, from, { r: from.r, c: from.c + step }, null).board;
       if (
-        battleshipInCheck(board, hidden, piece.color) ||
-        battleshipInCheck(mid, hidden, piece.color)
+        battleshipInCheck(board, hidden, piece.color, activeHiddenCheck) ||
+        battleshipInCheck(mid, hidden, piece.color, activeHiddenCheck)
       ) {
         return false;
       }
     }
     const result = applyMove(board, from, to, epTarget);
-    return !battleshipInCheck(result.board, hidden, piece.color);
+    return !battleshipInCheck(result.board, hidden, piece.color, activeHiddenCheck);
   });
 }
 
 /** A hidden bishop moves like a bishop. Capturing reveals it; quiet moves keep it hidden. */
-export function hiddenBishopMoves(board: Board, hidden: HiddenBishops, color: Color): Sq[] {
+export function hiddenBishopMoves(
+  board: Board,
+  hidden: HiddenBishops,
+  color: Color,
+  activeHiddenCheck: Color | null,
+): Sq[] {
   const bishop = hidden[color];
   if (!bishop) return [];
   const out: Sq[] = [];
@@ -93,7 +89,7 @@ export function hiddenBishopMoves(board: Board, hidden: HiddenBishops, color: Co
       } else {
         nextHidden = { ...hidden, [color]: { ...bishop, sq: to } };
       }
-      if (!battleshipInCheck(nextBoard, nextHidden, color)) out.push(to);
+      if (!battleshipInCheck(nextBoard, nextHidden, color, activeHiddenCheck)) out.push(to);
       if (target) break;
       r += dr;
       c += dc;
@@ -118,8 +114,14 @@ export function hiddenBishopAttacks(board: Board, bishop: HiddenBishop, target: 
   return true;
 }
 
-export function battleshipInCheck(board: Board, hidden: HiddenBishops, color: Color): boolean {
+export function battleshipInCheck(
+  board: Board,
+  hidden: HiddenBishops,
+  color: Color,
+  activeHiddenCheck: Color | null,
+): boolean {
   if (inCheck(board, color)) return true;
+  if (activeHiddenCheck !== other(color)) return false;
   const king = findKing(board, color);
   const enemy = hidden[other(color)];
   return !!king && !!enemy && hiddenBishopAttacks(board, enemy, king);
@@ -130,13 +132,14 @@ export function battleshipHasAnyMove(
   hidden: HiddenBishops,
   color: Color,
   epTarget: Sq | null,
+  activeHiddenCheck: Color | null,
 ): boolean {
-  if (hiddenBishopMoves(board, hidden, color).length) return true;
+  if (hiddenBishopMoves(board, hidden, color, activeHiddenCheck).length) return true;
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       if (
         board[r]![c]?.color === color &&
-        battleshipPieceMoves(board, hidden, { r, c }, epTarget).length
+        battleshipPieceMoves(board, hidden, { r, c }, epTarget, activeHiddenCheck).length
       ) {
         return true;
       }

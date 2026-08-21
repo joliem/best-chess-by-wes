@@ -9,6 +9,7 @@ import {
   type Sq,
 } from "@/lib/chess";
 import { cn } from "@/lib/utils";
+import { CheckHaze } from "@/components/chess/ChessBoard";
 
 export type CoinReveal = { sq: Sq; gold: number; silver: number; nonce: number };
 
@@ -82,7 +83,6 @@ export function TreasureBoard({
                   dark ? "bg-stone-dark" : "bg-stone-light",
                   clickable ? "cursor-pointer hover:brightness-125" : "cursor-default",
                   isSelected && "ring-4 ring-inset ring-torch",
-                  checkSq && same(checkSq, sq) && "animate-check-pulse",
                   canPick && "ring-4 ring-inset ring-jade",
                   revealing && "animate-coin-flip z-20",
                 )}
@@ -115,6 +115,7 @@ export function TreasureBoard({
                     {GLYPH[piece.color][piece.type]}
                   </span>
                 )}
+                {checkSq && same(checkSq, sq) && <CheckHaze />}
 
                 {/* temporary-power badges float above the square */}
                 {crowned && (
